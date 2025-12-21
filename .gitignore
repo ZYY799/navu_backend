@@ -54,8 +54,7 @@ audio_output/
 route_output/
 fig/
 _nul/
-weights/   # 如果你改成自动下载权重，这个目录不必提交；若你想提交空目录也无效（Git不存空目录）
-
+weights/   
 # =========================
 # Large model weights / binaries
 # =========================
@@ -72,3 +71,23 @@ Thumbs.db
 .vscode/
 .idea/
 *.iml
+# IDE / tools
+.idea/
+.vscode/
+.claude/
+
+# local junk
+_nul
+
+# outputs
+audio_output/
+route_output/
+fig/
+
+# large weights
+*.pt
+
+# secrets
+.env
+.env.*
+!.env.example
