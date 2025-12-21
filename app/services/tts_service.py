@@ -57,7 +57,9 @@ class TTSService:
             # 生成文件名
             filename = self._generate_filename(text, session_id)
             filename = filename.replace('.wav', '.mp3')  # Edge TTS生成mp3
-            filepath = os.path.join(self.output_dir, filename)
+            # Windows路径修复
+            filepath = os.path.abspath(os.path.join(self.output_dir, filename))
+            filepath = filepath.replace('\\', '/')  # 转换为正斜杠
             
             # 检查文件是否已存在（缓存）
             if os.path.exists(filepath):
@@ -121,8 +123,12 @@ class TTSService:
     @staticmethod
     def _generate_filename(text: str, session_id: str) -> str:
         """生成音频文件名"""
+        import re
         hash_obj = hashlib.md5(f"{text}{session_id}".encode())
-        return f"{hash_obj.hexdigest()}.wav"
+        filename = f"{hash_obj.hexdigest()}.mp3"
+        # Windows文件名不能包含特殊字符
+        filename = re.sub(r'[<>:"/\\|?*]', '_', filename)
+        return filename
     
     @staticmethod
     def _mock_audio_url(text: str) -> str:

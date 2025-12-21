@@ -42,6 +42,7 @@ class VoiceTextRequest(BaseModel):
     userId: str = Field(..., description="用户ID")
     sessionId: str = Field(..., description="会话ID")
     text: str = Field(..., description="识别的文本内容")
+    location: Optional[Dict[str, float]] = Field(None, description="当前位置 {lat, lng}")
     timestamp: int = Field(..., description="时间戳（毫秒）")
 
 

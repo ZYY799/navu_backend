@@ -1,0 +1,74 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.pyre/
+.ruff_cache/
+
+# =========================
+# Virtualenv / environment
+# =========================
+.venv/
+venv/
+ENV/
+env/
+
+# =========================
+# Dotenv / secrets (NEVER COMMIT)
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Jupyter
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# Build / packaging
+# =========================
+build/
+dist/
+*.egg-info/
+
+# =========================
+# Logs / temp
+# =========================
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+
+# =========================
+# Runtime outputs / artifacts (your project)
+# =========================
+audio_output/
+route_output/
+fig/
+_nul/
+weights/   # 如果你改成自动下载权重，这个目录不必提交；若你想提交空目录也无效（Git不存空目录）
+
+# =========================
+# Large model weights / binaries
+# =========================
+*.pt
+*.onnx
+*.engine
+*.tflite
+
+# =========================
+# OS / IDE
+# =========================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.iml

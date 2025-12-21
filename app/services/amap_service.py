@@ -1,11 +1,11 @@
 """
 高德地图服务
 """
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from config.settings import settings
 import requests
 import math
-
+import asyncio
 
 class AmapService:
     """高德地图API服务"""
@@ -55,6 +55,98 @@ class AmapService:
             print(f"高德API调用失败: {e}")
             return self._mock_routes(origin, destination)
     
+    async def search_poi_text(
+        self,
+        keywords: str,
+        city: Optional[str] = None,
+        limit: int = 5,
+    ) -> Dict[str, Any]:
+        """
+        使用高德 WebService 「POI 关键字搜索」获取地点坐标（返回第一个 POI + 候选列表）
+
+        返回：
+        {
+          "success": bool,
+          "poi": {"name": str, "address": str, "lat": float, "lng": float, "adcode": str},
+          "candidates": [ ... ],
+          "raw": {...}   # 可选：便于 debug
+        }
+        """
+        if self.mock_mode:
+            return {
+                "success": True,
+                "poi": {"name": keywords, "address": "", "lat": 39.916527, "lng": 116.397128, "adcode": ""},
+                "candidates": [],
+                "raw": {"mock": True},
+            }
+
+        # ✅ 高德 POI 关键字搜索：restapi.amap.com/v3/place/text
+        url = "https://restapi.amap.com/v3/place/text"
+        params: Dict[str, Any] = {
+            "key": self.api_key,
+            "keywords": keywords,
+            "output": "JSON",
+            "offset": str(max(1, min(limit, 25))),  # 高德 offset 通常 1-25
+            "page": "1",
+            "extensions": "base",
+        }
+        if city and city.strip():
+            params["city"] = city.strip()
+            params["citylimit"] = "true"
+
+        def _do_req() -> Dict[str, Any]:
+            r = requests.get(url, params=params, timeout=10)
+            r.raise_for_status()
+            return r.json()
+
+        try:
+            data = await asyncio.to_thread(_do_req)
+        except Exception as e:
+            return {"success": False, "error": f"amap poi request failed: {e}"}
+
+        # 高德常见返回：status="1" 表示成功
+        if data.get("status") != "1":
+            return {"success": False, "error": f"amap poi status!=1 info={data.get('info')}", "raw": data}
+
+        pois: List[Dict[str, Any]] = data.get("pois") or []
+        if len(pois) == 0:
+            return {"success": False, "error": f"未找到地点: {keywords}", "raw": data}
+
+        def _parse_one(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+            loc = (p.get("location") or "").strip()  # "lng,lat"
+            if "," not in loc:
+                return None
+            try:
+                lng_s, lat_s = loc.split(",", 1)
+                lng = float(lng_s)
+                lat = float(lat_s)
+            except Exception:
+                return None
+
+            return {
+                "name": (p.get("name") or "").strip(),
+                "address": (p.get("address") or "").strip(),
+                "lat": lat,
+                "lng": lng,
+                "adcode": (p.get("adcode") or "").strip(),
+            }
+
+        candidates: List[Dict[str, Any]] = []
+        for p in pois[:max(1, min(limit, 10))]:
+            x = _parse_one(p)
+            if x:
+                candidates.append(x)
+
+        if len(candidates) == 0:
+            return {"success": False, "error": f"找到 POI 但 location 解析失败: {keywords}", "raw": data}
+
+        return {
+            "success": True,
+            "poi": candidates[0],
+            "candidates": candidates,
+            "raw": data,  # ✅ 你 debug 时很有用；如果嫌大可删
+        }
+
     def _parse_routes(self, data: Dict) -> List[Dict]:
         """解析高德API返回的路线数据"""
         routes = []

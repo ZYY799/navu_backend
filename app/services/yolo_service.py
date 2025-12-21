@@ -6,7 +6,19 @@ from config.settings import settings
 from app.models.schemas import ObstacleInfo
 import base64
 import io
+import sys
+import numpy as np
 from PIL import Image
+import tempfile
+import os
+from pathlib import Path
+import urllib.request
+
+# Windows编码修复 (仅在非Jupyter环境)
+if sys.platform == 'win32' and hasattr(sys.stdout, 'buffer'):
+    import codecs
+    sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
+    sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
 
 
 class YOLOService:
@@ -19,12 +31,38 @@ class YOLOService:
         self.mock_mode = settings.MOCK_MODE
         self.model = None
         
-        if not self.mock_mode:
-            self._load_model()
-    
-    def _load_model(self):
-        """加载YOLO模型"""
+    def _weights_path(self) -> str:
+        # 建议把 settings.YOLO_MODEL_PATH 设成 "weights/yolov8n.pt"
+        return self.model_path
+
+    def _ensure_weights(self) -> bool:
+        """确保权重文件存在：不存在则下载。失败返回 False"""
+        path = Path(self._weights_path())
+        if path.exists():
+            return True
+
+        # 你可以把 URL 放到环境变量里：YOLO_MODEL_URL
+        url = getattr(settings, "YOLO_MODEL_URL", None) or os.getenv(
+            "YOLO_MODEL_URL",
+            "https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8n.pt"
+        )
+
         try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            print(f"[YOLO] weights not found, downloading: {url} -> {path}")
+            urllib.request.urlretrieve(url, str(path))
+            print("[YOLO] download done.")
+            return True
+        except Exception as e:
+            print(f"[YOLO] download failed: {e}")
+            return False
+        
+    def _load_model(self):
+        """加载YOLO模型（带自动下载）"""
+        try:
+            if not self._ensure_weights():
+                raise RuntimeError("weights not available")
+
             from ultralytics import YOLO
             self.model = YOLO(self.model_path)
             print(f"✅ YOLO模型加载成功: {self.model_path}")
@@ -34,36 +72,69 @@ class YOLOService:
             self.mock_mode = True
     
     async def detect_batch(self, images_base64: List[str]) -> List[Dict]:
-        """批量检测图片中的障碍物"""
+        """
+        批量检测图片中的障碍物
+
+        Args:
+            images_base64: Base64编码的图片列表（前端传来的格式）
+
+        Returns:
+            检测结果列表，每个元素包含obstacles数组
+        """
+        if (not self.mock_mode) and (self.model is None):
+            self._load_model()
+
         if self.mock_mode:
             return self._mock_detection(len(images_base64))
-        
+
         results = []
-        for img_b64 in images_base64:
+        for idx, img_b64 in enumerate(images_base64, 1):
+            temp_file = None
             try:
                 # 解码Base64图片
                 img_data = base64.b64decode(img_b64)
                 image = Image.open(io.BytesIO(img_data))
-                
+
+                # 转换为RGB模式（如果需要）
+                if image.mode != 'RGB':
+                    image = image.convert('RGB')
+
+                # 保存到临时文件（YOLO需要文件路径）
+                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg')
+                image.save(temp_file.name, 'JPEG')
+                temp_file.close()
+
                 # YOLO推理
-                detections = self.model(image, conf=self.confidence)[0]
-                
+                detections = self.model(temp_file.name, conf=self.confidence, verbose=False)[0]
+
                 # 解析结果
                 obstacles = []
-                for det in detections.boxes.data:
-                    x1, y1, x2, y2, conf, cls = det
-                    obstacles.append({
-                        "class": int(cls),
-                        "confidence": float(conf),
-                        "bbox": [float(x1), float(y1), float(x2), float(y2)]
-                    })
-                
+                if hasattr(detections, 'boxes') and len(detections.boxes) > 0:
+                    for det in detections.boxes.data:
+                        x1, y1, x2, y2, conf, cls = det
+                        obstacles.append({
+                            "class": int(cls),
+                            "confidence": float(conf),
+                            "bbox": [float(x1), float(y1), float(x2), float(y2)]
+                        })
+
                 results.append({"obstacles": obstacles})
-                
+                print(f"✅ 图片 {idx} 检测完成: 发现 {len(obstacles)} 个对象")
+
             except Exception as e:
-                print(f"检测失败: {e}")
+                print(f"❌ 图片 {idx} 检测失败: {e}")
+                import traceback
+                traceback.print_exc()
                 results.append({"obstacles": []})
-        
+
+            finally:
+                # 删除临时文件
+                if temp_file and os.path.exists(temp_file.name):
+                    try:
+                        os.unlink(temp_file.name)
+                    except:
+                        pass
+
         return results
     
     def _mock_detection(self, count: int) -> List[Dict]:

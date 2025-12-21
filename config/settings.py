@@ -2,6 +2,7 @@
 系统配置管理
 """
 import os
+from pydantic import Field
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
@@ -25,12 +26,17 @@ class Settings(BaseSettings):
     LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "1000"))
     
     # YOLO模型配置
-    YOLO_MODEL_PATH: str = os.getenv("YOLO_MODEL_PATH", "yolov8n.pt")
+    YOLO_MODEL_PATH: str = os.getenv("YOLO_MODEL_PATH", "weights/yolov8n.pt")
+    YOLO_MODEL_URL: str = os.getenv(
+        "YOLO_MODEL_URL",
+        "https://github.com/ultralytics/assets/releases/download/v8.2.0/yolov8n.pt"
+    )
+
     YOLO_CONFIDENCE: float = float(os.getenv("YOLO_CONFIDENCE", "0.5"))
     YOLO_DEVICE: str = os.getenv("YOLO_DEVICE", "cpu")
     
     # TTS配置
-    TTS_PROVIDER: str = os.getenv("TTS_PROVIDER", "azure")  # azure/aliyun/edge
+    TTS_PROVIDER: str = Field(default="mock", env="TTS_PROVIDER")
     TTS_API_KEY: str = os.getenv("TTS_API_KEY", "")
     TTS_REGION: str = os.getenv("TTS_REGION", "eastus")
     TTS_VOICE: str = os.getenv("TTS_VOICE", "zh-CN-XiaoxiaoNeural")
