@@ -25,4 +25,4 @@ RUN mkdir -p audio_output route_output
 EXPOSE 8000
 
 # 启动命令
-CMD ["python", "main.py"]
+CMD ["bash", "-lc", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
