@@ -38,7 +38,6 @@ async def process_voice_text(request: VoiceTextRequest):
             user_message=request.text,
             session=session
         )
-        print("[voice/text][LLM] out =", json.dumps(llm_response, ensure_ascii=False))
 
         # 更新会话历史
         session.history.append({"role": "user", "content": request.text})

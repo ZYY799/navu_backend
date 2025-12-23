@@ -39,14 +39,14 @@ class AmapService:
                 "key": self.api_key,
                 "origin": f"{origin['lng']},{origin['lat']}",
                 "destination": f"{destination['lng']},{destination['lat']}",
-                "show_fields": "polyline"
+                "show_fields": "polyline,steps",
             }
             
             response = requests.get(url, params=params, timeout=10)
             data = response.json()
             
             if data.get("status") == "1":
-                return self._parse_routes(data)
+                return self._parse_routes(data, origin, destination)
             else:
                 print(f"高德API错误: {data.get('info')}")
                 return self._mock_routes(origin, destination)
@@ -147,31 +147,92 @@ class AmapService:
             "raw": data,  # ✅ 你 debug 时很有用；如果嫌大可删
         }
 
-    def _parse_routes(self, data: Dict) -> List[Dict]:
-        """解析高德API返回的路线数据"""
-        routes = []
-        
-        for idx, path in enumerate(data.get("route", {}).get("paths", [])):
-            route = {
+    def _join_step_polylines(self, path: Dict[str, Any]) -> str:
+        pieces: List[str] = []
+        steps = path.get("steps") or []
+        for st in steps:
+            if not isinstance(st, dict):
+                continue
+            pl = (st.get("polyline") or "").strip()
+            if pl:
+                pieces.append(pl)
+        return ";".join(pieces)
+
+
+    def _parse_routes(self, data: Dict, origin: Dict[str, float], destination: Dict[str, float]) -> List[Dict]:
+        """解析高德API返回的路线数据（补充 polyline）"""
+        routes: List[Dict] = []
+
+        paths = (data.get("route") or {}).get("paths") or []
+        for idx, path in enumerate(paths):
+            # -------- route 基础字段 --------
+            route: Dict[str, Any] = {
                 "routeId": f"route_{idx}",
                 "name": "推荐路线" if idx == 0 else f"备选路线{idx}",
-                "distance": int(path.get("distance", 0)),
-                "duration": int(path.get("duration", 0)),
+                "distance": int(path.get("distance", 0) or 0),
+                "duration": int(path.get("duration", 0) or 0),
                 "steps": [],
-                "accessibilityScore": 85 - idx * 5  # 模拟无障碍评分
+                "accessibilityScore": 85 - idx * 5,
+                # ✅ 先占位：后面填
+                "polyline": "",
+
             }
-            
-            for step in path.get("steps", []):
+
+            # -------- 1) 优先拿 path-level polyline（如果存在通常就是整条路线） --------
+            path_poly = path.get("polyline")
+            merged_poly: str = ""
+
+            if isinstance(path_poly, str) and path_poly.strip():
+                merged_poly = path_poly.strip()
+            else:
+                # -------- 2) 否则从 steps 里拼 polyline --------
+                step_joined = self._join_step_polylines(path)
+                if isinstance(step_joined, str) and step_joined.strip():
+                    merged_poly = step_joined.strip()
+
+            # -------- 3) 如果高德没给 polyline：兜底用 mock polyline --------
+            if not merged_poly:
+                merged_poly = self._mock_polyline(origin, destination, n=60)
+
+            route["polyline"] = merged_poly
+
+            # -------- steps 解析（保持你原逻辑，但可选加 step.polyline） --------
+            steps = path.get("steps") or []
+            for step in steps:
                 route["steps"].append({
-                    "instruction": step.get("instruction", ""),
-                    "distance": int(step.get("distance", 0)),
-                    "duration": int(step.get("duration", 0))
+                    "instruction": (step.get("instruction") or ""),
+                    "distance": int(step.get("distance", 0) or 0),
+                    "duration": int(step.get("duration", 0) or 0),
+                    # ✅ 可选：如果你未来前端想画“分段轨迹”
+                    "polyline": (step.get("polyline") or "") if isinstance(step.get("polyline"), str) else ""
                 })
-            
+
             routes.append(route)
-        
+
         return routes
+
     
+    def _mock_polyline(self, origin: Dict[str, float], destination: Dict[str, float], n: int = 60) -> str:
+        """
+        生成一条直线插值 polyline（多点），用于 mock / 兜底
+        输出："lng,lat;lng,lat;..."
+        """
+        try:
+            lat1, lng1 = float(origin["lat"]), float(origin["lng"])
+            lat2, lng2 = float(destination["lat"]), float(destination["lng"])
+        except Exception:
+            return ""
+
+        n = max(2, min(int(n), 400))
+        pieces: List[str] = []
+        for i in range(n):
+            t = i / (n - 1)
+            lat = lat1 + (lat2 - lat1) * t
+            lng = lng1 + (lng2 - lng1) * t
+            pieces.append(f"{lng:.6f},{lat:.6f}")
+        return ";".join(pieces)
+
+
     def _mock_routes(
         self,
         origin: Dict,
@@ -183,7 +244,7 @@ class AmapService:
             origin["lat"], origin["lng"],
             destination["lat"], destination["lng"]
         ))
-        
+        polyline = self._mock_polyline(origin, destination, n=120)
         return [
             {
                 "routeId": "route_0",
@@ -207,7 +268,8 @@ class AmapService:
                         "duration": 167
                     }
                 ],
-                "accessibilityScore": 90
+                "accessibilityScore": 90,
+                "polyline": polyline,
             },
             {
                 "routeId": "route_1",
@@ -221,7 +283,8 @@ class AmapService:
                         "duration": int(distance * 0.85 // 1.2)
                     }
                 ],
-                "accessibilityScore": 75
+                "accessibilityScore": 75,
+                "polyline": polyline,
             }
         ]
     

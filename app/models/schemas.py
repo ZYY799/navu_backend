@@ -98,6 +98,11 @@ class RouteStep(BaseModel):
     distance: int = Field(..., description="距离（米）")
     duration: int = Field(..., description="时间（秒）")
 
+    # ✅ 新增：该 step 的 polyline（高德通常在 step 上给）
+    polyline: Optional[str] = Field(
+        None,
+        description='该 step 的轨迹串，格式 "lng,lat;lng,lat;..."'
+    )
 
 class RouteOption(BaseModel):
     """路线选项"""
@@ -107,7 +112,17 @@ class RouteOption(BaseModel):
     duration: int = Field(..., description="预计时间（秒）")
     steps: List[RouteStep] = Field(default_factory=list, description="路线步骤")
     accessibilityScore: int = Field(..., description="无障碍评分 (1-100)")
+    # ✅ 新增：route-level polyline（把所有 step.polyline 拼起来）
+    polyline: Optional[str] = Field(
+        None,
+        description='整条路线轨迹串（拼接 steps.polyline），格式 "lng,lat;lng,lat;..."'
+    )
 
+    # ✅ 新增：给你前端 RouteDto.polylineStr 用（等价于 polyline）
+    polylineStr: Optional[str] = Field(
+        None,
+        description='同 polyline，兼容前端字段名'
+    )
 
 class NavStartResponse(BaseModel):
     """开始导航响应"""
@@ -160,7 +175,14 @@ class NavigationSession(BaseModel):
     routeData: Optional[Dict[str, Any]] = None
     createdAt: int
     updatedAt: int
-
+    # ---- perception snapshot (for LLM / UI / WS push) ----
+    lastPerceptionAt: Optional[int] = None
+    lastSafetyLevel: Optional[int] = None
+    lastRoadCondition: Optional[str] = None
+    lastAiGuidance: Optional[str] = None
+    lastObstacles: Optional[List[Dict[str, Any]]] = None   # 或 List[ObstacleInfo]
+    lastWarningText: Optional[str] = None
+    lastWarningAudioUrl: Optional[str] = None
 
 class ConversationSession(BaseModel):
     """对话会话"""

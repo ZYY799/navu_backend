@@ -7,7 +7,10 @@ from app.models.schemas import ObstacleInfo
 import base64
 import io
 import sys
-import numpy as np
+try:
+    import numpy as np
+except Exception:
+    np = None
 from PIL import Image
 import tempfile
 import os
@@ -30,7 +33,9 @@ class YOLOService:
         self.device = settings.YOLO_DEVICE
         self.mock_mode = settings.MOCK_MODE
         self.model = None
-        
+        self._device_auto: str = ""   # 最终用的 device
+        self._fail_streak: int = 0    # 连续失败计数（用于自动降级 mock）
+
     def _weights_path(self) -> str:
         # 建议把 settings.YOLO_MODEL_PATH 设成 "weights/yolov8n.pt"
         return self.model_path
@@ -58,28 +63,39 @@ class YOLOService:
             return False
         
     def _load_model(self):
-        """加载YOLO模型（带自动下载）"""
+        """加载YOLO模型（带自动下载 + 自动选GPU/CPU）"""
         try:
             if not self._ensure_weights():
                 raise RuntimeError("weights not available")
 
+            # ✅ 自动选 device：有 CUDA 用 cuda，否则 cpu
+            try:
+                import torch
+                auto_dev = "cuda" if torch.cuda.is_available() else "cpu"
+            except Exception:
+                auto_dev = "cpu"
+
+            # ✅ 允许 settings.YOLO_DEVICE 覆盖（如果你设置了）
+            dev = (self.device or "").strip().lower()
+            if dev in ["cuda", "cpu", "mps"]:
+                self._device_auto = dev
+            else:
+                self._device_auto = auto_dev
+
             from ultralytics import YOLO
             self.model = YOLO(self.model_path)
-            print(f"✅ YOLO模型加载成功: {self.model_path}")
+            print(f"✅ YOLO模型加载成功: {self.model_path}  device={self._device_auto}")
         except Exception as e:
             print(f"❌ YOLO模型加载失败: {e}")
             print("⚠️  将使用模拟模式")
             self.mock_mode = True
+            self.model = None
     
     async def detect_batch(self, images_base64: List[str]) -> List[Dict]:
         """
         批量检测图片中的障碍物
-
-        Args:
-            images_base64: Base64编码的图片列表（前端传来的格式）
-
-        Returns:
-            检测结果列表，每个元素包含obstacles数组
+        - ✅ 任意一张成功完成 YOLO 推理 => 返回真实结果（允许其他张为空）
+        - ✅ 只有三张都失败（都抛异常）=> 本轮回退 mock
         """
         if (not self.mock_mode) and (self.model is None):
             self._load_model()
@@ -87,29 +103,50 @@ class YOLOService:
         if self.mock_mode:
             return self._mock_detection(len(images_base64))
 
-        results = []
+        results: List[Dict] = []
+        any_infer_ok: bool = False  # ✅ 本轮是否有任意一张“成功跑完推理（无异常）”
+
         for idx, img_b64 in enumerate(images_base64, 1):
             temp_file = None
             try:
-                # 解码Base64图片
-                img_data = base64.b64decode(img_b64)
+                b64 = (img_b64 or "").strip()
+
+                # ✅ 兼容 data URL：data:image/jpeg;base64,xxxx
+                if b64.startswith("data:") and "," in b64:
+                    b64 = b64.split(",", 1)[1].strip()
+
+                # ✅ 修复 base64 padding（有些占位图会缺 =）
+                pad = (-len(b64)) % 4
+                if pad:
+                    b64 = b64 + ("=" * pad)
+
+                # 解码 Base64
+                img_data = base64.b64decode(b64)
+
+                # PIL 读图（load() 可更早暴露 broken stream）
                 image = Image.open(io.BytesIO(img_data))
+                image.load()
 
-                # 转换为RGB模式（如果需要）
-                if image.mode != 'RGB':
-                    image = image.convert('RGB')
+                if image.mode != "RGB":
+                    image = image.convert("RGB")
 
-                # 保存到临时文件（YOLO需要文件路径）
-                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg')
-                image.save(temp_file.name, 'JPEG')
+                # 保存到临时文件（YOLO 支持 path）
+                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
+                image.save(temp_file.name, "JPEG")
                 temp_file.close()
 
-                # YOLO推理
-                detections = self.model(temp_file.name, conf=self.confidence, verbose=False)[0]
+                # ✅ 推理：显式 device（如果你在 _load_model 里算好了）
+                # 如果你没加 self._device_auto，也可以先把 device=... 这一行删掉
+                detections = self.model(
+                    temp_file.name,
+                    conf=self.confidence,
+                    device=(getattr(self, "_device_auto", "") or None),
+                    verbose=False
+                )[0]
 
                 # 解析结果
                 obstacles = []
-                if hasattr(detections, 'boxes') and len(detections.boxes) > 0:
+                if hasattr(detections, "boxes") and len(detections.boxes) > 0:
                     for det in detections.boxes.data:
                         x1, y1, x2, y2, conf, cls = det
                         obstacles.append({
@@ -119,6 +156,7 @@ class YOLOService:
                         })
 
                 results.append({"obstacles": obstacles})
+                any_infer_ok = True
                 print(f"✅ 图片 {idx} 检测完成: 发现 {len(obstacles)} 个对象")
 
             except Exception as e:
@@ -128,14 +166,19 @@ class YOLOService:
                 results.append({"obstacles": []})
 
             finally:
-                # 删除临时文件
                 if temp_file and os.path.exists(temp_file.name):
                     try:
                         os.unlink(temp_file.name)
-                    except:
+                    except Exception:
                         pass
 
+        # ✅ 本轮回退：三张都没成功跑完推理（全部抛异常）才回退 mock
+        if not any_infer_ok:
+            print("⚠️ 本轮 3 张均推理失败 -> fallback mock_detection(本轮)")
+            return self._mock_detection(len(images_base64))
+
         return results
+
     
     def _mock_detection(self, count: int) -> List[Dict]:
         """模拟检测结果"""
