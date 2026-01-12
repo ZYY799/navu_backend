@@ -2,7 +2,12 @@
 
 # 无障碍导航后端系统
 
+
 高德开发者竞赛后端程序
+合作开发项目的伙伴：
+- [@luoxinlan322-sudo](https://github.com/luoxinlan322-sudo) - 技术搭档
+
+
 ---
 
 ## 快速开始
