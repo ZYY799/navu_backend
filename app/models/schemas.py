@@ -5,9 +5,6 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 from enum import Enum
 
-
-# ==================== 枚举类型 ====================
-
 class NavState(str, Enum):
     """导航状态"""
     ASKING = "asking"  # 询问阶段
@@ -28,6 +25,7 @@ class ObstacleType(str, Enum):
 
 class SafetyLevel(int, Enum):
     """安全等级 (1-5, 5最安全)"""
+    # TODO 等级评定细则待优化
     DANGEROUS = 1
     UNSAFE = 2
     MODERATE = 3
@@ -35,10 +33,7 @@ class SafetyLevel(int, Enum):
     VERY_SAFE = 5
 
 
-# ==================== 请求模型 ====================
-
 class VoiceTextRequest(BaseModel):
-    """语音文本请求"""
     userId: str = Field(..., description="用户ID")
     sessionId: str = Field(..., description="会话ID")
     text: str = Field(..., description="识别的文本内容")
@@ -47,7 +42,6 @@ class VoiceTextRequest(BaseModel):
 
 
 class PerceptionBatchRequest(BaseModel):
-    """感知批次请求"""
     userId: str = Field(..., description="用户ID")
     navSessionId: str = Field(..., description="导航会话ID")
     images: List[str] = Field(..., description="Base64编码的图片列表（最多3张）", max_length=3)
@@ -56,17 +50,12 @@ class PerceptionBatchRequest(BaseModel):
 
 
 class NavStartRequest(BaseModel):
-    """开始导航请求"""
     userId: str = Field(..., description="用户ID")
     sessionId: str = Field(..., description="对话会话ID")
     origin: Optional[Dict[str, float]] = Field(None, description="起点坐标 {lat, lng}")
     destination: Dict[str, float] = Field(..., description="终点坐标 {lat, lng}")
 
-
-# ==================== 响应模型 ====================
-
 class VoiceTextResponse(BaseModel):
-    """语音文本响应"""
     success: bool
     message: str = Field(..., description="系统回复文本")
     audioUrl: Optional[str] = Field(None, description="TTS音频URL")
@@ -75,7 +64,6 @@ class VoiceTextResponse(BaseModel):
 
 
 class ObstacleInfo(BaseModel):
-    """障碍物信息"""
     type: str = Field(..., description="障碍物类型")
     distance: float = Field(..., description="距离（米）")
     direction: str = Field(..., description="方向（前方/左前方/右前方）")
@@ -83,7 +71,6 @@ class ObstacleInfo(BaseModel):
 
 
 class PerceptionBatchResponse(BaseModel):
-    """感知批次响应"""
     success: bool
     obstacles: List[ObstacleInfo] = Field(default_factory=list, description="检测到的障碍物")
     roadCondition: str = Field(..., description="道路状况描述")
@@ -93,39 +80,33 @@ class PerceptionBatchResponse(BaseModel):
 
 
 class RouteStep(BaseModel):
-    """路线步骤"""
     instruction: str = Field(..., description="指令文本")
     distance: int = Field(..., description="距离（米）")
     duration: int = Field(..., description="时间（秒）")
 
-    # ✅ 新增：该 step 的 polyline（高德通常在 step 上给）
     polyline: Optional[str] = Field(
         None,
         description='该 step 的轨迹串，格式 "lng,lat;lng,lat;..."'
     )
 
 class RouteOption(BaseModel):
-    """路线选项"""
     routeId: str = Field(..., description="路线ID")
     name: str = Field(..., description="路线名称（推荐/最短/无障碍）")
     distance: int = Field(..., description="总距离（米）")
     duration: int = Field(..., description="预计时间（秒）")
     steps: List[RouteStep] = Field(default_factory=list, description="路线步骤")
     accessibilityScore: int = Field(..., description="无障碍评分 (1-100)")
-    # ✅ 新增：route-level polyline（把所有 step.polyline 拼起来）
     polyline: Optional[str] = Field(
         None,
         description='整条路线轨迹串（拼接 steps.polyline），格式 "lng,lat;lng,lat;..."'
     )
 
-    # ✅ 新增：给你前端 RouteDto.polylineStr 用（等价于 polyline）
     polylineStr: Optional[str] = Field(
         None,
         description='同 polyline，兼容前端字段名'
     )
 
 class NavStartResponse(BaseModel):
-    """开始导航响应"""
     success: bool
     navSessionId: str = Field(..., description="导航会话ID")
     routes: List[RouteOption] = Field(default_factory=list, description="路线选项")
@@ -133,8 +114,6 @@ class NavStartResponse(BaseModel):
     wsUrl: str = Field(..., description="WebSocket连接URL")
     audioUrl: Optional[str] = Field(None, description="语音提示URL")
 
-
-# ==================== WebSocket消息模型 ====================
 
 class WSMessage(BaseModel):
     """WebSocket消息基类"""
@@ -161,10 +140,7 @@ class ObstacleWarning(BaseModel):
     suggestion: str = Field(..., description="建议")
 
 
-# ==================== 内部数据模型 ====================
-
 class NavigationSession(BaseModel):
-    """导航会话"""
     navSessionId: str
     userId: str
     state: NavState = NavState.ASKING
@@ -175,7 +151,7 @@ class NavigationSession(BaseModel):
     routeData: Optional[Dict[str, Any]] = None
     createdAt: int
     updatedAt: int
-    # ---- perception snapshot (for LLM / UI / WS push) ----
+
     lastPerceptionAt: Optional[int] = None
     lastSafetyLevel: Optional[int] = None
     lastRoadCondition: Optional[str] = None
@@ -185,7 +161,6 @@ class NavigationSession(BaseModel):
     lastWarningAudioUrl: Optional[str] = None
 
 class ConversationSession(BaseModel):
-    """对话会话"""
     sessionId: str
     userId: str
     history: List[Dict[str, str]] = Field(default_factory=list)

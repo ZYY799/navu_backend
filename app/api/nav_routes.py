@@ -25,12 +25,7 @@ amap_service = AmapService()
 llm_service = LLMService()
 tts_service = TTSService()
 
-# -----------------------------
-# 工具函数
-# -----------------------------
-
 def _parse_polyline_points(polyline: str) -> list[dict]:
-    # "lng,lat;lng,lat;..." -> [{"lat":..,"lng":..}, ...]
     out: list[dict] = []
     if not isinstance(polyline, str) or not polyline.strip():
         return out
@@ -58,7 +53,6 @@ def _haversine_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     return R * c
 
 def _remaining_distance_along(points: list[dict], start_idx: int) -> int:
-    # 近似：把 idx..end 的点段距离累加
     if not points or start_idx >= len(points) - 1:
         return 0
     total = 0.0
@@ -101,9 +95,6 @@ def build_ws_url(req: Request, nav_session_id: str) -> str:
 
 
 def to_latlng_dict(opt: Optional[Dict[str, float]]) -> Optional[Dict[str, float]]:
-    """
-    schemas 里 origin/destination/location 都是 {lat, lng}
-    """
     if opt is None:
         return None
     if "lat" in opt and "lng" in opt:
@@ -162,7 +153,6 @@ def _downsample_points(points: list[dict], max_n: int = 80) -> list[dict]:
     return out
 
 def _min_dist_to_points(loc: dict, pts: list[dict]) -> float:
-    # 简化版：loc 到 pts 中最近点的距离（米）
     if not pts:
         return float("inf")
     best = float("inf")
@@ -194,11 +184,6 @@ def _pick_step_index_by_polyline(loc: dict, step_points: list[list[dict]]) -> in
             best_i = i
     return best_i
 
-
-# -----------------------------
-# 后台：指令循环（你原来缺的核心）
-# -----------------------------
-
 async def nav_instruction_loop(nav_session_id: str) -> None:
     print(f"[LOOP][START] navSessionId={nav_session_id}")
 
@@ -225,7 +210,7 @@ async def nav_instruction_loop(nav_session_id: str) -> None:
     tts_cache: Dict[str, str] = {}
     try:
         while True:
-            await asyncio.sleep(1.0)  # ✅ 真 loop 建议 1s tick（指令节流由“step变化”控制）
+            await asyncio.sleep(1.0)
 
             nav = session_manager.get_navigation(nav_session_id)
             if nav is None:
@@ -239,7 +224,6 @@ async def nav_instruction_loop(nav_session_id: str) -> None:
             route_data = nav.routeData or {}
             active = route_data.get("activeRoute") if isinstance(route_data, dict) else None
             if not isinstance(active, dict):
-                # 没有路线：只能等（或发提示）
                 await websocket_manager.send_message(
                     nav_session_id=nav_session_id,
                     message_type="NAV_INSTRUCTION",
@@ -252,15 +236,12 @@ async def nav_instruction_loop(nav_session_id: str) -> None:
                 )
                 continue
 
-            # 取路线信息
             total_dist = int(active.get("distance", 0) or 0)
             steps = active.get("steps") or []
             polyline = (active.get("polyline") or active.get("polylineStr") or "").strip()
             points = _parse_polyline_points(polyline)
 
-            # 必须有定位才能推进
             if not isinstance(nav.currentLocation, dict) or "lat" not in nav.currentLocation or "lng" not in nav.currentLocation:
-                # 每隔几秒提醒一次（避免刷屏）
                 if now_ms() - last_loc_seen_at > 4000:
                     last_loc_seen_at = now_ms()
                     await websocket_manager.send_message(
@@ -277,17 +258,14 @@ async def nav_instruction_loop(nav_session_id: str) -> None:
 
             loc = nav.currentLocation
 
-            # 估算剩余距离/时间
             if points:
                 near_idx = _find_nearest_idx(points, loc)
                 remaining = _remaining_distance_along(points, near_idx)
             else:
-                # 兜底：用 total_dist（不精准但可用）
                 remaining = total_dist
 
-            remaining_time = int(remaining / 1.2)  # 1.2m/s 兜底步行速度
+            remaining_time = int(remaining / 1.2)
 
-            # 到达判定（你也可以换成 settings.ARRIVE_THRESHOLD）
             if remaining <= 15:
                 session_manager.update_navigation_state(nav_session_id, NavState.ARRIVED)
                 await websocket_manager.send_message(
@@ -302,24 +280,19 @@ async def nav_instruction_loop(nav_session_id: str) -> None:
                 )
                 return
 
-            # 选 step（只在 step 变化时推一次指令）
             cache = (route_data.get("_cache") or {}) if isinstance(route_data, dict) else {}
             step_points = cache.get("stepPoints") or []
             route_points = cache.get("routePoints") or []
 
-            # 没缓存就兜底现算一次（避免线上突然空）
             if not step_points:
                 step_points = _build_step_points(steps, max_points_per_step=60)
 
-            # 1) 用 step.polyline 找最近 step
             step_idx = _pick_step_index_by_polyline(loc, step_points)
 
-            # 2) remaining 仍然用 route-level polyline（更连续）
             if route_points:
                 near_idx = _find_nearest_idx(route_points, loc)
                 remaining = _remaining_distance_along(route_points, near_idx)
             else:
-                # 没缓存就用你旧逻辑 points
                 if points:
                     near_idx = _find_nearest_idx(points, loc)
                     remaining = _remaining_distance_along(points, near_idx)
@@ -333,11 +306,9 @@ async def nav_instruction_loop(nav_session_id: str) -> None:
             if not text:
                 text = "请继续沿路线前进。"
 
-            # ✅ 节流：step 变了 或者 text 变了才发
             if step_idx != last_step_idx or text != last_sent_text:
                 last_step_idx = step_idx
                 last_sent_text = text
-                # ✅ 给主导航指令生成音频（缓存避免重复合成）
                 audio_url: Optional[str] = None
                 try:
                     if text in tts_cache:
@@ -369,10 +340,6 @@ async def nav_instruction_loop(nav_session_id: str) -> None:
         print(f"[LOOP][ERROR] navSessionId={nav_session_id} err={e}")
         return
 
-# -----------------------------
-# POST /v1/nav/perception/batch
-# -----------------------------
-
 @router.post("/perception/batch", response_model=PerceptionBatchResponse)
 async def process_perception_batch(request: PerceptionBatchRequest):
     print("[perception] HIT navSessionId=", request.navSessionId, "imgCount=", len(request.images))
@@ -380,13 +347,10 @@ async def process_perception_batch(request: PerceptionBatchRequest):
     try:
         # YOLO检测
         detection_results = await yolo_service.detect_batch(request.images)
-
         # 整合障碍物信息
         obstacles = yolo_service.aggregate_obstacles(detection_results)
-
         # 评估安全等级
         safety_level = yolo_service.calculate_safety_level(obstacles)
-
         # LLM生成指路建议
         ai_guidance = await llm_service.generate_guidance(
             obstacles=obstacles,
@@ -395,7 +359,7 @@ async def process_perception_batch(request: PerceptionBatchRequest):
 
         # TTS生成提醒
         audio_url = None
-        warning_text = ""   # ✅ 避免后面引用未定义
+        warning_text = ""
         if obstacles:
             warning_text = yolo_service.generate_warning_text(obstacles)
             audio_url = await tts_service.text_to_speech(
@@ -403,8 +367,7 @@ async def process_perception_batch(request: PerceptionBatchRequest):
                 session_id=request.navSessionId
             )
 
-        # ✅ 1) 写入导航会话快照（给主导航/LLM增强/调试用）
-        nav = None  # ✅ 作用域固定
+        nav = None
         try:
             nav = session_manager.get_navigation(request.navSessionId)
             if nav is not None:
@@ -420,10 +383,8 @@ async def process_perception_batch(request: PerceptionBatchRequest):
 
                 nav.updatedAt = now_ms()
         except Exception:
-            # 不影响主流程
             pass
 
-        # ✅ 2) 如果有障碍物：同时推 WS 预警（统一进 seq & 抢占播放）
         if obstacles:
             try:
                 await websocket_manager.send_message(
@@ -437,10 +398,8 @@ async def process_perception_batch(request: PerceptionBatchRequest):
                     },
                 )
             except Exception:
-                # WS 推送失败也不影响 HTTP
                 pass
 
-        # ✅ 保持你原有 HTTP 输出（这里建议把字段补全，不然前端 fromPerception 可能拿不到）
         road_condition = yolo_service.describe_road_condition(obstacles)
         return PerceptionBatchResponse(
             success=True,
@@ -454,9 +413,7 @@ async def process_perception_batch(request: PerceptionBatchRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
-# -----------------------------
-# POST /v1/nav/start
-# -----------------------------
+
 @router.post("/start", response_model=NavStartResponse)
 async def start_navigation(request: NavStartRequest, req: Request):
     """
@@ -483,46 +440,39 @@ async def start_navigation(request: NavStartRequest, req: Request):
             
         origin = request.origin
 
-        # 路径规划
         routes = await amap_service.plan_walking_route(
             origin=origin,
             destination=request.destination
         )
-        # ✅ 默认选第一条路线（route_0）
         active_route = routes[0] if routes else None
         if active_route:
             # 存 routeId
             nav_session.routeId = active_route.get("routeId")
 
-            # ✅ 1) 预先缓存 stepPoints（用于更准的“当前 step”判断）
             steps = active_route.get("steps") or []
             step_points = _build_step_points(steps, max_points_per_step=60)
 
-            # ✅ 2) 预先缓存 routePoints（用于 remainingDistance 最近点/剩余距离）
             polyline = (active_route.get("polyline") or active_route.get("polylineStr") or "").strip()
             route_points_raw = _parse_polyline_points(polyline)
             route_points = _downsample_points(route_points_raw, max_n=800)
 
-            # 存 routeData（给 loop 用）
             nav_session.routeData = {
-                "activeRoute": active_route,  # 原样保留
-                "routes": routes,             # 原样保留
-                "_cache": {                   # ✅ 新增：内部缓存
+                "activeRoute": active_route,
+                "routes": routes,
+                "_cache": {
                     "stepPoints": step_points,
                     "routePoints": route_points,
                 }
             }
             nav_session.updatedAt = now_ms()
 
-        
-        # 生成提示音频
+
         message = f"已为您规划{len(routes)}条路线，请选择一条开始导航"
         audio_url = await tts_service.text_to_speech(
             text=message,
             session_id=nav_session.navSessionId
         )
-        
-        # 构建WebSocket URL
+
         ws_url = build_ws_url(req, nav_session.navSessionId)
         
         return NavStartResponse(
@@ -537,11 +487,6 @@ async def start_navigation(request: NavStartRequest, req: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# -----------------------------
-# WS /v1/nav/stream
-# -----------------------------
-
 @router.websocket("/stream")
 async def navigation_stream(websocket: WebSocket, navSessionId: str):
     """
@@ -555,14 +500,12 @@ async def navigation_stream(websocket: WebSocket, navSessionId: str):
     nav_task: Optional[asyncio.Task] = None
 
     try:
-        # 连接成功：NAV_STARTED（你日志里已经看到这个）
         await websocket_manager.send_message(
             nav_session_id=navSessionId,
             message_type="NAV_STARTED",
             data={"message": "导航已开始"},
         )
 
-        # ✅ 核心：启动后台指令 loop（你之前的问题就在这里缺失）
         nav_task = asyncio.create_task(nav_instruction_loop(navSessionId))
         def _on_done(t: asyncio.Task) -> None:
             try:
@@ -600,10 +543,7 @@ async def navigation_stream(websocket: WebSocket, navSessionId: str):
                             nav.updatedAt = now_ms()
                     continue
 
-                # 其他类型先忽略即可
-
             except asyncio.TimeoutError:
-                # 30 秒没收到客户端上行：发 HEARTBEAT
                 await websocket_manager.send_message(
                     nav_session_id=navSessionId,
                     message_type="HEARTBEAT",

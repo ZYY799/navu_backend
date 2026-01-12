@@ -8,7 +8,6 @@ import math
 import asyncio
 
 class AmapService:
-    """高德地图API服务"""
     
     def __init__(self):
         self.api_key = settings.AMAP_API_KEY
@@ -80,13 +79,12 @@ class AmapService:
                 "raw": {"mock": True},
             }
 
-        # ✅ 高德 POI 关键字搜索：restapi.amap.com/v3/place/text
         url = "https://restapi.amap.com/v3/place/text"
         params: Dict[str, Any] = {
             "key": self.api_key,
             "keywords": keywords,
             "output": "JSON",
-            "offset": str(max(1, min(limit, 25))),  # 高德 offset 通常 1-25
+            "offset": str(max(1, min(limit, 25))),
             "page": "1",
             "extensions": "base",
         }
@@ -104,7 +102,6 @@ class AmapService:
         except Exception as e:
             return {"success": False, "error": f"amap poi request failed: {e}"}
 
-        # 高德常见返回：status="1" 表示成功
         if data.get("status") != "1":
             return {"success": False, "error": f"amap poi status!=1 info={data.get('info')}", "raw": data}
 
@@ -144,7 +141,7 @@ class AmapService:
             "success": True,
             "poi": candidates[0],
             "candidates": candidates,
-            "raw": data,  # ✅ 你 debug 时很有用；如果嫌大可删
+            "raw": data,
         }
 
     def _join_step_polylines(self, path: Dict[str, Any]) -> str:
@@ -160,12 +157,11 @@ class AmapService:
 
 
     def _parse_routes(self, data: Dict, origin: Dict[str, float], destination: Dict[str, float]) -> List[Dict]:
-        """解析高德API返回的路线数据（补充 polyline）"""
         routes: List[Dict] = []
 
         paths = (data.get("route") or {}).get("paths") or []
         for idx, path in enumerate(paths):
-            # -------- route 基础字段 --------
+
             route: Dict[str, Any] = {
                 "routeId": f"route_{idx}",
                 "name": "推荐路线" if idx == 0 else f"备选路线{idx}",
@@ -173,37 +169,31 @@ class AmapService:
                 "duration": int(path.get("duration", 0) or 0),
                 "steps": [],
                 "accessibilityScore": 85 - idx * 5,
-                # ✅ 先占位：后面填
                 "polyline": "",
 
             }
 
-            # -------- 1) 优先拿 path-level polyline（如果存在通常就是整条路线） --------
             path_poly = path.get("polyline")
             merged_poly: str = ""
 
             if isinstance(path_poly, str) and path_poly.strip():
                 merged_poly = path_poly.strip()
             else:
-                # -------- 2) 否则从 steps 里拼 polyline --------
                 step_joined = self._join_step_polylines(path)
                 if isinstance(step_joined, str) and step_joined.strip():
                     merged_poly = step_joined.strip()
 
-            # -------- 3) 如果高德没给 polyline：兜底用 mock polyline --------
             if not merged_poly:
                 merged_poly = self._mock_polyline(origin, destination, n=60)
 
             route["polyline"] = merged_poly
 
-            # -------- steps 解析（保持你原逻辑，但可选加 step.polyline） --------
             steps = path.get("steps") or []
             for step in steps:
                 route["steps"].append({
                     "instruction": (step.get("instruction") or ""),
                     "distance": int(step.get("distance", 0) or 0),
                     "duration": int(step.get("duration", 0) or 0),
-                    # ✅ 可选：如果你未来前端想画“分段轨迹”
                     "polyline": (step.get("polyline") or "") if isinstance(step.get("polyline"), str) else ""
                 })
 
@@ -213,10 +203,7 @@ class AmapService:
 
     
     def _mock_polyline(self, origin: Dict[str, float], destination: Dict[str, float], n: int = 60) -> str:
-        """
-        生成一条直线插值 polyline（多点），用于 mock / 兜底
-        输出："lng,lat;lng,lat;..."
-        """
+
         try:
             lat1, lng1 = float(origin["lat"]), float(origin["lng"])
             lat2, lng2 = float(destination["lat"]), float(destination["lng"])
@@ -238,8 +225,7 @@ class AmapService:
         origin: Dict,
         destination: Dict
     ) -> List[Dict]:
-        """模拟路线数据"""
-        # 简单计算直线距离
+
         distance = int(self._haversine_distance(
             origin["lat"], origin["lng"],
             destination["lat"], destination["lng"]
@@ -250,7 +236,7 @@ class AmapService:
                 "routeId": "route_0",
                 "name": "推荐路线（无障碍优先）",
                 "distance": distance,
-                "duration": distance // 1.2,  # 假设步行速度1.2m/s
+                "duration": distance // 1.2,
                 "steps": [
                     {
                         "instruction": "向北直行200米",
@@ -293,7 +279,7 @@ class AmapService:
         lat1: float, lng1: float,
         lat2: float, lng2: float
     ) -> float:
-        """Haversine公式计算两点距离（米）"""
+
         R = 6371000  # 地球半径（米）
         
         phi1 = math.radians(lat1)
@@ -325,8 +311,7 @@ class AmapService:
             }
         """
         threshold = threshold or settings.NAV_DEVIATION_THRESHOLD
-        
-        # 找最近的路径点
+
         min_distance = float('inf')
         nearest_point = None
         

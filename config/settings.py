@@ -8,9 +8,7 @@ from functools import lru_cache
 
 
 class Settings(BaseSettings):
-    """系统配置类"""
-    
-    # 基础配置
+
     DEBUG: bool = os.getenv("DEBUG", "True") == "True"
     PORT: int = int(os.getenv("PORT", "8000"))
     MOCK_MODE: bool = os.getenv("MOCK_MODE", "True") == "True"
@@ -70,10 +68,7 @@ def get_settings() -> Settings:
     return Settings()
 
 
-# 全局配置实例
 settings = get_settings()
 
-
-# 创建必要的目录
 os.makedirs(settings.AUDIO_OUTPUT_DIR, exist_ok=True)
 os.makedirs(settings.ROUTE_OUTPUT_DIR, exist_ok=True)

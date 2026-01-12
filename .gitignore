@@ -52,7 +52,7 @@ dist/
 # =========================
 audio_output/
 route_output/
-fig/
+test_fig/
 _nul/
 weights/   
 # =========================
@@ -82,7 +82,7 @@ _nul
 # outputs
 audio_output/
 route_output/
-fig/
+test_fig/
 
 # large weights
 *.pt

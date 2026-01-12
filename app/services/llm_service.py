@@ -8,7 +8,6 @@ import re
 from typing import Optional, Tuple
 
 class LLMService:
-    """LLM服务类"""
 
     def __init__(self):
         self.api_key = settings.LLM_API_KEY
@@ -17,11 +16,9 @@ class LLMService:
         self.amap_service = None  # 延迟初始化，避免循环导入
     
     def _strip_dsml(self, reply: str) -> str:
-        """把 DSML 工具调用痕迹从回复中裁掉（前端不会看到中间过程）"""
         if not reply:
             return reply
 
-        # 兼容两种 DSML 标记：<｜DSML｜... 和 <|DSML|...
         markers = ["<｜DSML｜", "<|DSML|"]
         cut_pos = -1
         for m in markers:
@@ -31,7 +28,6 @@ class LLMService:
                 
         if cut_pos != -1:
             head = reply[:cut_pos].strip()
-            # ✅ 如果 DSML 在开头导致 head 为空，就别裁（至少别返回空）
             if head:
                 return head
             return reply.strip()
@@ -39,7 +35,6 @@ class LLMService:
         return reply
 
     def _extract_dsml_search_poi(self, reply: str) -> Optional[Tuple[str, str]]:
-        # very KISS：只处理 search_poi 这一种
         if 'invoke name="search_poi"' not in reply:
             return None
         m1 = re.search(r'parameter name="poi_name"[^>]*>(.*?)</', reply)
@@ -68,7 +63,6 @@ class LLMService:
         if self.mock_mode:
             return self._mock_llm_response(user_message, session)
 
-        # 真实LLM调用，带工具调用支持
         try:
             import openai
 
@@ -86,7 +80,6 @@ class LLMService:
             except Exception:
                 last_loc = None
 
-            # 第一次调用LLM
             response = client.chat.completions.create(
                 model=self.model,
                 messages=messages,
@@ -101,9 +94,7 @@ class LLMService:
             print("[LLM] tool_calls =", getattr(assistant_message, "tool_calls", None))
             print("[LLM] content(head) =", (assistant_message.content or "")[:200])
 
-            # 检查是否需要调用工具
             if assistant_message.tool_calls:
-                # 执行工具调用
                 messages.append(assistant_message)
 
                 merged_data: Dict[str, Any] = {}
@@ -119,7 +110,6 @@ class LLMService:
                         if "origin" not in function_args and last_loc:
                             function_args["origin"] = last_loc
 
-                    # 执行工具
                     function_response = await self._execute_tool(
                         function_name,
                         function_args
@@ -128,7 +118,6 @@ class LLMService:
                     print(f"[TOOL] {function_name} resp = {json.dumps(function_response, ensure_ascii=False)[:800]}")
 
                     if isinstance(function_response, dict):
-                        # search_poi 返回 { success, poi: { name, location:{lat,lng} } }
                         poi = function_response.get("poi")
                         if isinstance(poi, dict):
                             loc = poi.get("location")
@@ -136,13 +125,11 @@ class LLMService:
                                 destination = {"lat": float(loc["lat"]), "lng": float(loc["lng"])}
                                 destination_name = str(poi.get("name")) if poi.get("name") else destination_name
 
-                        # plan_route 返回 { success, route: {...} }
                         if function_response.get("success") is True and "route" in function_response:
                             r = function_response.get("route")
                             if isinstance(r, dict):
                                 route_preview = r
 
-                    # 添加工具返回结果
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call.id,
@@ -150,7 +137,6 @@ class LLMService:
                         "content": json.dumps(function_response, ensure_ascii=False)
                     })
 
-                # 第二次调用LLM，让它基于工具结果生成最终回复
                 second_response = client.chat.completions.create(
                     model=self.model,
                     messages=messages,
@@ -176,18 +162,14 @@ class LLMService:
                 }
             
             else:
-                # 无需调用工具，直接返回
                 reply = assistant_message.content or ""
 
-                # ✅ DSML 兜底：模型把工具调用写进了文本（不是 tool_calls）
                 hit = self._extract_dsml_search_poi(reply)
                 if hit:
                     poi_name, city = hit
                     poi_res = await self._tool_search_poi({"poi_name": poi_name, "city": city})
 
-                    # 构造输出 data：把 origin / destination 都补齐
                     data_out: Dict[str, Any] = {}
-                    # 如果 voice_routes.py 里把 last_location 存进 session.context，这里就能取到
                     last_loc = session.context.get("last_location") if hasattr(session, "context") else None
                     if last_loc:
                         data_out["origin"] = last_loc
@@ -195,22 +177,20 @@ class LLMService:
                     if poi_res.get("success") and poi_res.get("poi") and poi_res["poi"].get("location"):
                         data_out["destination"] = poi_res["poi"]["location"]
 
-                        # ✅ 前端只看到“干净文案”，中间 DSML 不会显示
                         clean_reply = f"我已找到「{poi_res['poi'].get('name', poi_name)}」的位置。现在要开始导航吗？"
                         return {
                             "reply": clean_reply,
-                            "nav_state": "asking",   # KISS：先让用户确认；你也可以直接 navigating
+                            "nav_state": "asking",
                             "data": data_out
                         }
 
-                    # POI 没搜到：也要把 DSML 裁掉再返回
                     clean_reply = self._strip_dsml(reply)
                     if not clean_reply:
                         clean_reply = f"我没找到「{poi_name}」的准确位置。可以换一个更具体的名称吗？"
                     return {"reply": clean_reply, "nav_state": "asking", "data": data_out}
 
-                # ✅ 没命中 DSML：正常解析 / 原逻辑
-                reply = self._strip_dsml(reply)  # 即便没 DSML，也不坏
+
+                reply = self._strip_dsml(reply)
                 parsed = self._parse_llm_reply(reply)
 
                 return {
@@ -258,7 +238,7 @@ class LLMService:
                     f"不要再询问“您现在在哪里”。只有当没有任何 location 时才询问。"
                 )
             })
-        messages.extend(history[-10:])  # 只保留最近10轮对话
+        messages.extend(history[-10:])
         messages.append({"role": "user", "content": user_message})
 
         return messages
@@ -310,7 +290,6 @@ class LLMService:
         function_name: str,
         function_args: Dict
     ) -> Dict:
-        """执行工具调用"""
         if function_name == "plan_route":
             return await self._tool_plan_route(function_args)
         elif function_name == "search_poi":
@@ -319,9 +298,8 @@ class LLMService:
             return {"error": f"未知工具: {function_name}"}
 
     async def _tool_plan_route(self, args: Dict) -> Dict:
-        """工具: 规划路线"""
         try:
-            # 延迟导入，避免循环依赖
+
             if self.amap_service is None:
                 from app.services.amap_service import AmapService
                 self.amap_service = AmapService()
@@ -332,14 +310,14 @@ class LLMService:
             routes = await self.amap_service.plan_walking_route(origin, destination)
 
             if routes:
-                route = routes[0]  # 使用第一条推荐路线
+                route = routes[0]
                 return {
                     "success": True,
                     "route": {
                         "name": route.get("name"),
                         "distance": route.get("distance"),
                         "duration": route.get("duration"),
-                        "steps": route.get("steps", [])[:3],  # 只返回前3步
+                        "steps": route.get("steps", [])[:3],
                         "accessibility_score": route.get("accessibilityScore")
                     }
                 }
@@ -356,7 +334,7 @@ class LLMService:
             }
 
     async def _tool_search_poi(self, args: Dict) -> Dict:
-        """工具: 搜索地点坐标（真实高德 POI 搜索）"""
+
         try:
             if self.amap_service is None:
                 from app.services.amap_service import AmapService
@@ -378,7 +356,6 @@ class LLMService:
                 return {"success": False, "error": r.get("error", "search_poi failed")}
 
             poi = r["poi"]
-            # ✅ 这里返回给 LLM/前端的统一结构
             return {
                 "success": True,
                 "poi": {
@@ -402,8 +379,7 @@ class LLMService:
             return {"success": False, "error": str(e)}
     
     def _parse_llm_reply(self, reply: str) -> Dict:
-        """解析LLM回复，提取结构化信息"""
-        # 尝试提取JSON
+
         try:
             if "```json" in reply:
                 json_str = reply.split("```json")[1].split("```")[0].strip()
@@ -423,7 +399,7 @@ class LLMService:
         user_message: str,
         session: Any
     ) -> Dict[str, Any]:
-        """模拟LLM响应（用于测试）"""
+
         message_lower = user_message.lower()
         
         if any(keyword in message_lower for keyword in ["超市", "商店", "买菜"]):
@@ -456,12 +432,10 @@ class LLMService:
         obstacles: List[Any],
         location: Dict
     ) -> str:
-        """生成AI指路建议"""
+
         if self.mock_mode:
             if obstacles:
                 return f"前方{obstacles[0].distance:.1f}米处有{obstacles[0].type}，建议减速慢行。"
             return "前方道路通畅，请继续直行。"
-        
-        # 真实LLM生成指路建议
-        # ... 类似上面的实现
+
         return "前方道路通畅，请继续直行。"

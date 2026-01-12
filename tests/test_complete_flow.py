@@ -8,43 +8,33 @@ import base64
 import sys
 import os
 
-# Windows编码
 if sys.platform == 'win32':
     import io
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 async def test_complete_flow():
-    print("=" * 70)
-    print("完整流程测试")
-    print("=" * 70)
 
-    # 1. 导入服务
     from app.services.tts_service import TTSService
     from app.services.yolo_service import YOLOService
     from app.services.llm_service import LLMService
     from app.services.amap_service import AmapService
     from app.core.session_manager import session_manager
 
-    # 2. 模拟前端输入
-    print("\n📥 模拟前端输入:")
+    print("\n模拟前端输入:")
 
-    # 当前位置（经纬度）
     current_location = {"lat": 39.916527, "lng": 116.397128}
     print(f"  位置: {current_location}")
 
-    # 语音转文字结果
     user_text = "我想去故宫"
     print(f"  语音文字: {user_text}")
 
-    # 加载真实图片
-    img_path = "fig/R-C.jpg"
+    img_path = "test_fig/R-C.jpg"
     if os.path.exists(img_path):
         with open(img_path, 'rb') as f:
             img_bytes = f.read()
             img_base64 = base64.b64encode(img_bytes).decode('utf-8')
         print(f"  图片: {img_path} (已加载)")
     else:
-        # 创建测试图片
         from PIL import Image
         import io as iolib
         img = Image.new('RGB', (640, 480), color=(100, 100, 100))
@@ -56,8 +46,7 @@ async def test_complete_flow():
 
     print("\n" + "=" * 70)
 
-    # 3. 障碍物检测
-    print("\n🔍 步骤1: 障碍物检测")
+    print("\n步骤1: 障碍物检测")
     yolo_service = YOLOService()
     results = await yolo_service.detect_batch([img_base64])
     obstacles = yolo_service.aggregate_obstacles(results)
@@ -69,12 +58,10 @@ async def test_complete_flow():
         for i, obs in enumerate(obstacles[:3], 1):
             print(f"    {i}. {obs.type} - {obs.distance}m - {obs.direction}")
 
-    # 4. LLM理解需求
-    print("\n🤖 步骤2: 理解用户需求")
+    print("\n步骤2: 理解用户需求")
     llm_service = LLMService()
     session = session_manager.create_conversation("test_user", "test_session")
 
-    # 添加位置上下文
     context_message = f"用户当前位置: {current_location['lat']}, {current_location['lng']}"
     full_message = f"{context_message}\n用户说: {user_text}"
 
@@ -82,11 +69,9 @@ async def test_complete_flow():
     print(f"  LLM回复: {llm_response['reply'][:100]}...")
     print(f"  导航状态: {llm_response['nav_state']}")
 
-    # 5. 生成语音回复
     print("\n🔊 步骤3: 生成语音回复")
     tts_service = TTSService()
 
-    # 组合障碍物警告和导航回复
     if obstacles:
         warning = yolo_service.generate_warning_text(obstacles)
         full_reply = f"{warning}。{llm_response['reply']}"
@@ -96,10 +81,6 @@ async def test_complete_flow():
     audio_url = await tts_service.text_to_speech(full_reply, "test_session")
     print(f"  生成音频: {audio_url}")
 
-    # 6. 返回结果
-    print("\n" + "=" * 70)
-    print("📤 系统返回结果:")
-    print("=" * 70)
 
     result = {
         "success": True,
@@ -119,16 +100,12 @@ async def test_complete_flow():
         "navData": llm_response.get('data', {})
     }
 
-    print(f"\n✅ 成功: {result['success']}")
-    print(f"💬 消息: {result['message']}")
-    print(f"🔊 音频: {result['audioUrl']}")
-    print(f"🚧 障碍物: {len(result['obstacles'])} 个")
-    print(f"⚠️  安全等级: {result['safetyLevel']}/5")
-    print(f"🧭 导航状态: {result['navState']}")
-
-    print("\n" + "=" * 70)
-    print("✅ 完整流程测试成功！")
-    print("=" * 70)
+    print(f"\n成功: {result['success']}")
+    print(f"消息: {result['message']}")
+    print(f"音频: {result['audioUrl']}")
+    print(f"障碍物: {len(result['obstacles'])} 个")
+    print(f"⚠安全等级: {result['safetyLevel']}/5")
+    print(f"导航状态: {result['navState']}")
 
     return result
 
