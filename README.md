@@ -12,8 +12,10 @@
 
 ## 视频演示
 [NAVU完整视频演示](https://www.bilibili.com/video/BV1horYBmEiP/?vd_source=17c0a0142f8ebd7df1073a5c92d75ed0)
+
 [识别结果演示](https://www.bilibili.com/video/BV1aorYBmEAx/?share_source=copy_web&vd_source=e72afecb05b00958296c3d225a203fdc)
-[](./docs/media/demo.mp4)
+
+[11](./docs/media/demo.mp4)
 
 
 ## 快速开始
