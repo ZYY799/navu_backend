@@ -71,7 +71,6 @@ accessible-nav-backend/
 │
 └── tests/                  # 测试代码
     └── test_frontend.py    # 前端集成测试
-
 ```
 
 ---
@@ -186,7 +185,3 @@ python tests/test_frontend.py
 - ReDoc: `http://localhost:8000/redoc`
 
 ---
-
-## 联系方式
-
-前端对接问题请查阅 `API.md`
