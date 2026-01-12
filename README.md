@@ -8,15 +8,15 @@
 
 ---
 
+
 ## 🎬 视频演示
 
-| 演示内容 | 链接 |
-|---------|------|
-| 完整功能演示 | [NAVU完整视频演示](https://www.bilibili.com/video/BV1horYBmEiP/?vd_source=17c0a0142f8ebd7df1073a5c92d75ed0) |
-| 识别效果展示 | [识别结果演示](https://www.bilibili.com/video/BV1aorYBmEAx/?share_source=copy_web&vd_source=e72afecb05b00958296c3d225a203fdc) |
-| 本地演示视频 | [Demo Video](./docs/media/demo.mp4) |
+| 演示内容 | 预览 | 链接 |
+|---------|------|------|
+| 完整功能演示 | ![封面](./docs/media/cover1.png) | [观看视频](https://www.bilibili.com/video/BV1horYBmEiP/) |
+| 识别效果展示 | ![封面](./docs/media/cover2.png) | [观看视频](https://www.bilibili.com/video/BV1aorYBmEAx/) |
 
----
+
 
 ## 🚀 快速开始
 
