@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NAVU·纳步 无障碍AI导航系统演示</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Noto+Sans+SC:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #20b26b; /* 科技绿 */
+            --secondary-color: #1e293b; /* 深空蓝 - 背景/深色文字 */
+            --accent-blue: #3b82f6; /* 辅助蓝 */
+            --accent-orange: #f59e0b; /* 警示橙 */
+            --text-light: #f8fafc; /* 浅色文字 */
+            --text-dark: #334155; /* 深色文字 */
+            --text-gray: #64748b; /* 灰色文字 */
+            --bg-light: #ffffff;
+            --bg-off-white: #f1f5f9;
+            --card-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --glow-shadow: 0 0 20px rgba(32, 178, 107, 0.3);
+            --slide-aspect-ratio: 16 / 9;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', 'Noto Sans SC', sans-serif;
+            background-color: #0f172a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        #presentation-container {
+            position: relative;
+            width: 90vw;
+            aspect-ratio: var(--slide-aspect-ratio);
+            max-height: 90vh;
+            background: var(--bg-light);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.6s ease-in-out, visibility 0.6s;
+            display: flex;
+            flex-direction: column;
+            padding: 4rem;
+        }
+
+        .slide.active {
+            opacity: 1;
+            visibility: visible;
+            z-index: 1;
+        }
+
+        /* 通用样式类 */
+        .h1-title { font-size: 3.5rem; font-weight: 900; line-height: 1.2; margin-bottom: 1rem; }
+        .h2-title { font-size: 2.5rem; font-weight: 700; margin-bottom: 2rem; color: var(--secondary-color); }
+        .highlight { color: var(--primary-color); }
+        .sub-text { font-size: 1.2rem; color: var(--text-gray); }
+        .flex-row { display: flex; gap: 2rem; }
+        .flex-col { display: flex; flex-direction: column; gap: 1.5rem; }
+        .flex-center { display: flex; justify-content: center; align-items: center; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; height: 100%; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; }
+        .card { background: var(--bg-light); padding: 2rem; border-radius: 1rem; box-shadow: var(--card-shadow); border: 1px solid var(--bg-off-white); }
+        .dark-card { background: rgba(30, 41, 59, 0.8); color: var(--text-light); border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); }
+        
+        .big-data { font-size: 3rem; font-weight: 900; color: var(--primary-color); line-height: 1; }
+        .data-label { font-size: 1rem; color: var(--text-gray); margin-top: 0.5rem; }
+        
+        /* 导航按钮 */
+        .nav-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-light);
+            border: none;
+            padding: 1rem;
+            font-size: 2rem;
+            cursor: pointer;
+            z-index: 10;
+            border-radius: 50%;
+            transition: background 0.3s;
+            backdrop-filter: blur(5px);
+        }
+        .nav-btn:hover { background: rgba(255, 255, 255, 0.3); color: var(--primary-color); }
+        #prev-btn { left: 1rem; }
+        #next-btn { right: 1rem; }
+
+        /* --- 特定幻灯片样式 --- */
+
+        /* Slide 1: 封面 */
+        #slide-1 {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(20, 83, 45, 0.8)), url('https://source.unsplash.com/1600x900/?city,night,blur'); /* 占位图 */
+            background-size: cover;
+            background-position: center;
+            color: var(--text-light);
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+        #slide-1 .mega-title { font-size: 6rem; font-weight: 900; letter-spacing: -2px; text-shadow: 0 0 30px rgba(32, 178, 107, 0.5); margin-bottom: 0.5rem;}
+        #slide-1 .subtitle { font-size: 2.5rem; font-weight: 300; margin-bottom: 4rem; opacity: 0.9; }
+        #slide-1 .quote { font-size: 1.5rem; font-style: italic; margin-bottom: 3rem; border-left: 4px solid var(--primary-color); padding-left: 1.5rem; display: inline-block; text-align: left;}
+        #slide-1 .tags { display: flex; gap: 1.5rem; justify-content: center; }
+        #slide-1 .tag { background: rgba(255,255,255,0.1); padding: 0.5rem 1.5rem; border-radius: 2rem; font-weight: 700; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2); }
+
+        /* Slide 2: 故事 */
+        #slide-2 .illustration-placeholder { background: var(--bg-off-white); border-radius: 1rem; height: 100%; display: flex; justify-content: center; align-items: center; font-size: 1.5rem; color: var(--text-gray); position: relative; overflow: hidden;}
+        #slide-2 .illustration-placeholder::after { content: '场景插画：夜晚独行'; position: absolute; }
+        #slide-2 .pain-point { display: flex; align-items: flex-start; gap: 1rem; padding: 1.5rem; background: var(--bg-light); border-radius: 1rem; box-shadow: var(--card-shadow); border-left: 5px solid var(--accent-orange); }
+        #slide-2 .pain-point i { font-size: 1.5rem; color: var(--accent-orange); margin-top: 0.3rem; }
+        #slide-2 .data-bar-container { margin-top: auto; background: var(--bg-off-white); padding: 1.5rem; border-radius: 1rem; }
+        #slide-2 .progress-bar { height: 10px; background: #e2e8f0; border-radius: 5px; overflow: hidden; margin-top: 0.5rem; }
+        #slide-2 .progress-fill { height: 100%; background: linear-gradient(90deg, var(--primary-color), var(--accent-blue)); width: 82.3%; }
+
+        /* Slide 3: 答案 */
+        #slide-3 { text-align: center; justify-content: center; }
+        #slide-3 .core-slogan { font-size: 4rem; font-weight: 900; color: var(--secondary-color); margin-bottom: 3rem; line-height: 1.2; }
+        #slide-3 .slogan-change { color: var(--text-gray); font-size: 3rem; }
+        #slide-3 .pillars { display: flex; justify-content: center; gap: 4rem; margin-bottom: 4rem; }
+        #slide-3 .pillar-item { display: flex; flex-direction: column; align-items: center; gap: 1rem; }
+        #slide-3 .pillar-icon { width: 80px; height: 80px; background: linear-gradient(135deg, var(--primary-color), var(--accent-blue)); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 2.5rem; color: white; box-shadow: var(--glow-shadow); }
+        #slide-3 .bottom-data { display: flex; justify-content: space-around; background: var(--bg-off-white); padding: 2rem; border-radius: 1rem; }
+
+        /* Slide 4: 原理 (Dark Tech) */
+        #slide-4 { background: var(--secondary-color); color: var(--text-light); }
+        #slide-4 .h2-title { color: var(--text-light); }
+        #slide-4 .flow-container { display: flex; gap: 2rem; height: 100%; align-items: center; }
+        #slide-4 .flow-diagram { flex: 2; display: flex; flex-direction: column; gap: 3rem; position: relative; }
+        #slide-4 .flow-row { display: flex; align-items: center; justify-content: space-between; position: relative; }
+        #slide-4 .flow-node { background: rgba(32, 178, 107, 0.1); border: 1px solid var(--primary-color); padding: 1rem 1.5rem; border-radius: 0.5rem; font-weight: 700; text-align: center; backdrop-filter: blur(5px); min-width: 120px; z-index: 2;}
+        #slide-4 .flow-arrow { flex-grow: 1; height: 2px; background: linear-gradient(90deg, var(--primary-color), var(--accent-blue)); position: relative; margin: 0 1rem; }
+        #slide-4 .flow-arrow::after { content: '►'; position: absolute; right: -5px; top: -8px; color: var(--accent-blue); font-size: 14px; }
+        #slide-4 .metrics-sidebar { flex: 1; display: flex; flex-direction: column; gap: 1.5rem; justify-content: center; }
+        #slide-4 .metric-card { background: rgba(255,255,255,0.05); padding: 1.5rem; border-radius: 1rem; border-left: 4px solid var(--primary-color); }
+
+        /* Slide 5: 高德能力 */
+        #slide-5 .chat-demo { background: var(--bg-off-white); border-radius: 1rem; padding: 2rem; height: 100%; display: flex; flex-direction: column; gap: 1.5rem; }
+        #slide-5 .chat-bubble { padding: 1rem 1.5rem; border-radius: 1rem; max-width: 80%; }
+        #slide-5 .chat-user { background: var(--accent-blue); color: white; align-self: flex-end; border-bottom-right-radius: 0; }
+        #slide-5 .chat-system { background: white; color: var(--text-dark); align-self: flex-start; border-bottom-left-radius: 0; box-shadow: var(--card-shadow); }
+        #slide-5 .function-call { font-family: monospace; font-size: 0.9rem; color: var(--accent-orange); background: rgba(245, 158, 11, 0.1); padding: 0.2rem 0.5rem; border-radius: 4px; margin: 0 0.2rem; }
+        #slide-5 .api-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; align-content: start; }
+        #slide-5 .api-card { display: flex; align-items: center; gap: 1rem; padding: 1rem; background: var(--bg-light); border-radius: 0.5rem; box-shadow: var(--card-shadow); }
+        #slide-5 .api-icon { font-size: 1.5rem; color: var(--primary-color); }
+
+        /* Slide 6: 核心功能 */
+        #slide-6 .feature-grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 2rem; height: 100%; }
+        #slide-6 .feature-cell { background: var(--bg-light); border-radius: 1rem; overflow: hidden; box-shadow: var(--card-shadow); display: flex; flex-direction: column; }
+        #slide-6 .mockup-header { padding: 1rem; background: var(--bg-off-white); font-weight: 700; display: flex; align-items: center; gap: 0.5rem; }
+        #slide-6 .mockup-body { flex: 1; background: #e2e8f0; display: flex; justify-content: center; align-items: center; color: var(--text-gray); font-style: italic; position: relative;}
+        #slide-6 .mockup-body::after { content: 'App界面截图占位'; position: absolute; }
+        #slide-6 .feature-benefit { padding: 1rem; background: rgba(32, 178, 107, 0.1); color: var(--primary-color); font-weight: 700; display: flex; align-items: center; gap: 0.5rem; }
+
+        /* Slide 7: 技术创新 (Dark) */
+        #slide-7 { 
+        background: #ffffff;  /* 纯白色背景 */
+        color: #1a1a1a;  /* 深色文字 */
+        }
+        #slide-7 .h2-title { 
+        color: #1a1a1a;  /* 深色标题 */
+        }
+        #slide-7 .innovation-card { 
+        background: rgba(0, 0, 0, 0.02);  /* 极浅灰底卡片 */
+        padding: 2rem; 
+        border-radius: 1rem; 
+        border-top: 4px solid #0066cc;  /* 蓝色边框 */
+        border-left: 1px solid rgba(0, 0, 0, 0.05);
+        border-right: 1px solid rgba(0, 0, 0, 0.05);
+        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        height: 100%; 
+        transition: transform 0.3s, box-shadow 0.3s; 
+        }
+        #slide-7 .innovation-card:hover { 
+        transform: translateY(-5px); 
+        background: rgba(0, 0, 0, 0.03);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);  /* 添加阴影 */
+        }
+        #slide-7 .tech-icon { 
+        font-size: 3rem; 
+        color: #0066cc;  /* 蓝色图标 */
+        margin-bottom: 1.5rem; 
+        }
+        #slide-7 .tech-list li { 
+        margin-bottom: 0.8rem; 
+        display: flex; 
+        align-items: center; 
+        gap: 0.5rem; 
+        color: #333333;  /* 深灰文字 */
+        }
+        #slide-7 .tech-list i { 
+        color: #0066cc;  /* 蓝色图标 */
+        font-size: 0.8rem; 
+        }
+
+        /* Slide 8: 鸿蒙生态 */
+        #slide-8 .harmony-logo { font-size: 2.5rem; font-weight: 900; background: linear-gradient(90deg, #007DFF, #004EFF); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 2rem; }
+        #slide-8 .ecosystem-list li { display: flex; align-items: center; gap: 1rem; font-size: 1.1rem; margin-bottom: 1.2rem; }
+        #slide-8 .ecosystem-list i { color: var(--primary-color); font-size: 1.3rem; }
+        #slide-8 .device-matrix { background: var(--bg-off-white); border-radius: 1rem; display: flex; justify-content: center; align-items: center; position: relative; }
+        #slide-8 .device-matrix::after { content: '鸿蒙多设备联动示意图 (手机+手表+耳机)'; color: var(--text-gray); position: absolute; }
+
+        /* Slide 9: 用户画像 */
+        #slide-9 .persona-card { background: var(--bg-light); border-radius: 1rem; box-shadow: var(--card-shadow); overflow: hidden; display: flex; flex-direction: column; }
+        #slide-9 .persona-header { background: linear-gradient(135deg, var(--primary-color), var(--accent-blue)); padding: 1.5rem; color: white; text-align: center; }
+        #slide-9 .persona-avatar { width: 80px; height: 80px; background: rgba(255,255,255,0.2); border-radius: 50%; margin: 0 auto 1rem; display: flex; justify-content: center; align-items: center; font-size: 2.5rem; }
+        #slide-9 .persona-body { padding: 1.5rem; flex: 1; display: flex; flex-direction: column; gap: 1rem; }
+        #slide-9 .persona-data-point { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--bg-off-white); padding-bottom: 0.5rem; }
+        #slide-9 .pilot-banner { background: var(--secondary-color); color: white; padding: 1rem; border-radius: 0.5rem; margin-top: 2rem; text-align: center; font-weight: 700; }
+
+        /* Slide 10: 商业模式 */
+        #slide-10 .model-card { background: var(--bg-light); border-radius: 1rem; box-shadow: var(--card-shadow); padding: 2rem; text-align: center; border-top: 5px solid; }
+        #slide-10 .model-b2c { border-color: var(--primary-color); }
+        #slide-10 .model-b2b { border-color: var(--accent-blue); }
+        #slide-10 .model-eco { border-color: var(--accent-orange); }
+        #slide-10 .model-icon { font-size: 3rem; margin-bottom: 1.5rem; }
+        #slide-10 .model-b2c i { color: var(--primary-color); }
+        #slide-10 .model-b2b i { color: var(--accent-blue); }
+        #slide-10 .model-eco i { color: var(--accent-orange); }
+
+        /* Slide 11: 市场象限 */
+        #slide-11 .market-data-list { display: flex; flex-direction: column; gap: 2rem; justify-content: center; }
+        #slide-11 .quadrant-chart { background: var(--bg-off-white); border-radius: 1rem; position: relative; padding: 2rem; display: flex; justify-content: center; align-items: center; }
+        #slide-11 .axis-x, #slide-11 .axis-y { position: absolute; background: var(--text-gray); opacity: 0.3; }
+        #slide-11 .axis-x { width: 90%; height: 2px; top: 50%; left: 5%; }
+        #slide-11 .axis-x::after { content: '路线规划能力 →'; position: absolute; right: 0; top: 10px; color: var(--text-dark); font-weight: 700; }
+        #slide-11 .axis-y { height: 90%; width: 2px; left: 50%; top: 5%; }
+        #slide-11 .axis-y::after { content: '安全感知能力 →'; position: absolute; top: -20px; left: -50px; color: var(--text-dark); font-weight: 700; white-space: nowrap; }
+        #slide-11 .competitor-dot { position: absolute; width: 20px; height: 20px; border-radius: 50%; background: var(--text-gray); transform: translate(-50%, -50%); display: flex; align-items: center; justify-content: center; color: white; font-size: 0.8rem; }
+        #slide-11 .comp-trad { bottom: 20%; left: 20%; }
+        #slide-11 .comp-map { bottom: 40%; right: 20%; background: var(--accent-blue); }
+        #slide-11 .comp-navu { top: 20%; right: 20%; background: var(--primary-color); width: 40px; height: 40px; font-weight: 900; box-shadow: 0 0 20px var(--primary-color); z-index: 2; }
+        #slide-11 .quadrant-label { position: absolute; font-weight: 700; color: var(--text-gray); opacity: 0.5; }
+        #slide-11 .ql-tr { top: 10%; right: 10%; color: var(--primary-color); opacity: 1; }
+
+        /* Slide 12: 收尾 (Dark Emotional) */
+        #slide-12 { background: var(--secondary-color); color: var(--text-light); text-align: center; }
+        #slide-12 .success-checklist { display: flex; justify-content: center; gap: 2rem; margin-bottom: 3rem; }
+        #slide-12 .check-item { display: flex; align-items: center; gap: 0.5rem; font-weight: 700; }
+        #slide-12 .check-item i { color: var(--primary-color); font-size: 1.2rem; }
+        #slide-12 .final-quote { font-size: 2rem; font-weight: 300; font-style: italic; margin: 3rem auto; max-width: 80%; position: relative; }
+        #slide-12 .final-quote::before, #slide-12 .final-quote::after { content: '"'; font-size: 4rem; color: var(--primary-color); position: absolute; opacity: 0.3; }
+        #slide-12 .final-quote::before { top: -2rem; left: -2rem; }
+        #slide-12 .final-quote::after { bottom: -4rem; right: -2rem; }
+        #slide-12 .status-bar { background: rgba(255,255,255,0.1); padding: 1.5rem; border-radius: 1rem; display: flex; justify-content: space-around; margin-top: auto; backdrop-filter: blur(10px); }
+        #slide-12 .status-item { display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.9rem; }
+        #slide-12 .status-item i { font-size: 1.5rem; }
+
+    </style>
+</head>
+<body>
+
+    <div id="presentation-container">
+        <button id="prev-btn" class="nav-btn"><i class="fas fa-chevron-left"></i></button>
+        <button id="next-btn" class="nav-btn"><i class="fas fa-chevron-right"></i></button>
+
+        <div class="slide active" id="slide-1">
+            <h1 class="mega-title">NAVU·纳步</h1>
+            <p class="subtitle">为 1700 万人点亮回家的路</p>
+            <div class="quote">"黑暗不可怕，可怕的是不知道前方的路通向何方"</div>
+            <div class="tags" style="margin-top: 4rem;">
+                <span class="tag"><i class="fas fa-eye"></i> AI视觉</span>
+                <span class="tag"><i class="fas fa-map-marked-alt"></i> 高德地图</span>
+                <span class="tag"><i class="fab fa-android"></i> HarmonyOS</span>
+            </div>
+        </div>
+
+        <div class="slide" id="slide-2">
+            <h2 class="h2-title">一个真实的故事 <span class="sub-text">/ 场景代入</span></h2>
+            <div class="grid-2">
+                <div class="illustration-placeholder">
+                    </div>
+                <div class="flex-col" style="justify-content: center;">
+                    <div class="pain-point">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <div>
+                            <h3>痛点 1：导而不航</h3>
+                            <p>"传统导航只管'怎么走'，不管我'能不能走'。" <span class="text-gray">- 视障用户</span></p>
+                        </div>
+                    </div>
+                    <div class="pain-point">
+                        <i class="fas fa-road-barrier"></i>
+                        <div>
+                            <h3>痛点 2：未知危险</h3>
+                            <p>盲道被占、突然出现的台阶，危险无法预知。</p>
+                        </div>
+                    </div>
+                    <div class="pain-point">
+                        <i class="fas fa-mobile-alt"></i>
+                        <div>
+                            <h3>痛点 3：交互复杂</h3>
+                            <p>界面太复杂，视障和老年群体根本用不起来。</p>
+                        </div>
+                    </div>
+
+                    <div class="data-bar-container">
+                        <div class="flex-row" style="justify-content: space-between; font-weight: 700;">
+                            <span>调研 218 人</span>
+                            <span>82.3% 遇到出行困扰</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="slide" id="slide-3">
+            <h1 class="core-slogan">
+                <span class="slogan-change">把导航从"路线指引"</span><br>
+                升级为"<span class="highlight">安全出行助手</span>"
+            </h1>
+            
+            <div class="pillars">
+                <div class="pillar-item">
+                    <div class="pillar-icon"><i class="fas fa-microphone"></i></div>
+                    <h3>语音交互</h3>
+                </div>
+                <div class="pillar-item">
+                    <div class="pillar-icon"><i class="fas fa-eye"></i></div>
+                    <h3>环境感知</h3>
+                </div>
+                <div class="pillar-item">
+                    <div class="pillar-icon"><i class="far fa-compass"></i></div>
+                    <h3>精准导航</h3>
+                </div>
+            </div>
+
+            <div class="bottom-data grid-3">
+                <div class="text-center">
+                    <div class="big-data">+74%</div>
+                    <div class="data-label">安全感提升</div>
+                </div>
+                <div class="text-center">
+                    <div class="big-data">91.2%</div>
+                    <div class="data-label">避免碰撞率</div>
+                </div>
+                <div class="text-center">
+                    <div class="big-data">3.7次/程</div>
+                    <div class="data-label">平均风险提示</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="slide" id="slide-4">
+            <h2 class="h2-title">工作原理 <span class="sub-text" style="color: rgba(255,255,255,0.6)">/ 双链路可视化流程</span></h2>
+            <div class="flow-container">
+                <div class="flow-diagram">
+                    <div class="flow-row">
+                        <div class="flow-node"><i class="fas fa-microphone-alt"></i> 语音输入</div>
+                        <div class="flow-arrow"></div>
+                        <div class="flow-node"><i class="fas fa-brain"></i> LLM理解</div>
+                        <div class="flow-arrow"></div>
+                        <div class="flow-node" style="border-color: var(--accent-blue); background: rgba(59, 130, 246, 0.1);"><i class="fas fa-map"></i> 高德API</div>
+                        <div class="flow-arrow"></div>
+                        <div class="flow-node"><i class="fas fa-route"></i> 路线规划</div>
+                    </div>
+                    
+                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 3rem; color: var(--primary-color); opacity: 0.5;">
+                        <i class="fas fa-sync-alt fa-spin" style="animation-duration: 3s;"></i>
+                    </div>
+
+                    <div class="flow-row">
+                        <div class="flow-node"><i class="fas fa-camera"></i> 摄像头</div>
+                        <div class="flow-arrow"></div>
+                        <div class="flow-node"><i class="fas fa-project-diagram"></i> YOLOv8检测</div>
+                        <div class="flow-arrow"></div>
+                        <div class="flow-node"><i class="fas fa-shield-alt"></i> 风险评分</div>
+                        <div class="flow-arrow"></div>
+                        <div class="flow-node"><i class="fas fa-volume-up"></i> 实时预警</div>
+                    </div>
+                </div>
+
+                <div class="metrics-sidebar">
+                    <div class="metric-card">
+                        <h3><i class="fas fa-bolt"></i> API 响应</h3>
+                        <div class="big-data">287ms</div>
+                    </div>
+                    <div class="metric-card">
+                        <h3><i class="fas fa-stopwatch"></i> 识别延迟</h3>
+                        <div class="big-data">≤120ms</div>
+                    </div>
+                    <div class="metric-card">
+                        <h3><i class="fas fa-check-circle"></i> 识别准确率</h3>
+                        <div class="big-data">94.6%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="slide" id="slide-5">
+            <h2 class="h2-title">高德能力 <span class="sub-text">/ Function Calling 展示</span></h2>
+            <div class="grid-2">
+                <div class="chat-demo">
+                    <div class="chat-bubble chat-user">
+                        "我想去附近的菜市场买点菜"
+                    </div>
+                    <div class="chat-bubble chat-system">
+                        正在为您查找...<br>
+                        <span class="function-call">[调用POI搜索: "菜市场", 范围: 1km]</span>
+                    </div>
+                    <div class="chat-bubble chat-system">
+                        找到最近的"便民生鲜市场"，距离您200米。<br>
+                        <span class="function-call">[调用步行导航规划]</span><br>
+                        已为您规划路线，请沿当前方向直行...
+                    </div>
+                </div>
+                
+                <div class="flex-col">
+                    <div class="api-grid">
+                        <div class="api-card"><i class="api-icon fas fa-map-marker-alt"></i> POI搜索</div>
+                        <div class="api-card"><i class="api-icon fas fa-walking"></i> 步行导航</div>
+                        <div class="api-card"><i class="api-icon fas fa-code-branch"></i> 地理编码</div>
+                        <div class="api-card"><i class="api-icon fas fa-undo"></i> 逆地理编码</div>
+                        <div class="api-card"><i class="api-icon fas fa-traffic-light"></i> 实时路况</div>
+                        <div class="api-card"><i class="api-icon fab fa-js"></i> JS API 2.0</div>
+                    </div>
+                    <div class="card grid-3 text-center" style="margin-top: auto; padding: 1.5rem;">
+                        <div><div class="big-data" style="font-size: 2rem;">99.2%</div><div class="data-label">调用成功率</div></div>
+                        <div><div class="big-data" style="font-size: 2rem;">4.3次</div><div class="data-label">平均调用/程</div></div>
+                        <div><div class="big-data" style="font-size: 2rem;">23.7%</div><div class="data-label">路径重算率</div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="slide" id="slide-6">
+            <h2 class="h2-title">核心功能 <span class="sub-text">/ 场景化体验</span></h2>
+            <div class="feature-grid">
+                <div class="feature-cell">
+                    <div class="mockup-header"><i class="fas fa-microphone"></i> 语音发起导航</div>
+                    <div class="mockup-body"></div>
+                    <div class="feature-benefit"><i class="fas fa-check-circle"></i> 3秒出路线，零操作门槛</div>
+                </div>
+                <div class="feature-cell">
+                    <div class="mockup-header"><i class="fas fa-route"></i> 实时路线引导</div>
+                    <div class="mockup-body"></div>
+                    <div class="feature-benefit"><i class="fas fa-check-circle"></i> 转向前50米提前播报</div>
+                </div>
+                <div class="feature-cell">
+                    <div class="mockup-header"><i class="fas fa-exclamation-triangle" style="color: var(--accent-orange)"></i> 障碍识别预警</div>
+                    <div class="mockup-body" style="border: 3px solid var(--accent-orange);"></div>
+                    <div class="feature-benefit" style="background: rgba(245, 158, 11, 0.1); color: var(--accent-orange);"><i class="fas fa-check-circle"></i> 提前2-5秒感知风险</div>
+                </div>
+                <div class="feature-cell">
+                    <div class="mockup-header"><i class="fas fa-clipboard-check"></i> 安全评分可解释</div>
+                    <div class="mockup-body"></div>
+                    <div class="feature-benefit"><i class="fas fa-check-circle"></i> 明确原因，智能建议</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="slide" id="slide-7">
+            <h2 class="h2-title">技术创新 <span class="sub-text" style="color: rgba(255,255,255,0.6)">/ 三大突破</span></h2>
+            <div class="grid-3">
+                <div class="innovation-card">
+                    <i class="tech-icon fas fa-network-wired"></i>
+                    <h3>端到端 AI Pipeline</h3>
+                    <ul class="tech-list" style="margin-top: 1.5rem; list-style: none;">
+                        <li><i class="fas fa-chevron-right"></i> ASR → LLM → Tool Call → TTS 全自动闭环</li>
+                        <li><i class="fas fa-chevron-right"></i> 多轮对话记忆，上下文理解能力</li>
+                    </ul>
+                </div>
+                <div class="innovation-card" style="border-color: var(--accent-blue);">
+                    <i class="tech-icon fas fa-layer-group" style="color: var(--accent-blue);"></i>
+                    <h3>多模态融合感知</h3>
+                    <ul class="tech-list" style="margin-top: 1.5rem; list-style: none;">
+                        <li><i class="fas fa-chevron-right"></i> GPS + 陀螺仪 + 摄像头 + 地图数据融合</li>
+                        <li><i class="fas fa-chevron-right"></i> 宏观路线 + 微观障碍 双重保障</li>
+                    </ul>
+                </div>
+                <div class="innovation-card" style="border-color: var(--accent-orange);">
+                    <i class="tech-icon fas fa-microchip" style="color: var(--accent-orange);"></i>
+                    <h3>轻量化高性能</h3>
+                    <ul class="tech-list" style="margin-top: 1.5rem; list-style: none;">
+                        <li><i class="fas fa-chevron-right"></i> YOLOv8n模型 仅3.2M参数</li>
+                        <li><i class="fas fa-chevron-right"></i> 续航3小时+ | 4G网络流畅运行</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="slide" id="slide-8">
+            <h2 class="h2-title">Why HarmonyOS? <span class="sub-text">/ 只有鸿蒙才能实现的体验</span></h2>
+            <div class="grid-2">
+                <div>
+                    <div class="harmony-logo">
+                        <i class="fas fa-infinity" style="margin-right: 0.5rem;"></i>
+                        HarmonyOS NEXT 原生开发
+                    </div>
+                    
+                    <div style="margin: 2rem 0;">
+                        <h3 style="color: var(--primary-color); font-size: 1.3rem; margin-bottom: 1rem;">
+                            <i class="fas fa-star"></i> 五大核心优势
+                        </h3>
+                        <ul class="ecosystem-list" style="list-style: none;">
+                            <li>
+                                <i class="fas fa-check-circle"></i> 
+                                <div>
+                                    <strong>ArkTS/ArkUI 原生开发</strong>
+                                    <p style="font-size: 0.9rem; color: #64748b; margin: 0.3rem 0 0 1.8rem;">
+                                        UI渲染效率提升40%，语音交互延迟<1秒
+                                    </p>
+                                </div>
+                            </li>
+                            <li>
+                                <i class="fas fa-check-circle"></i> 
+                                <div>
+                                    <strong>系统级音频会话管理</strong>
+                                    <p style="font-size: 0.9rem; color: #64748b; margin: 0.3rem 0 0 1.8rem;">
+                                        导航播报+障碍预警双通道无冲突，支持蓝牙耳机/手表协同
+                                    </p>
+                                </div>
+                            </li>
+                            <li>
+                                <i class="fas fa-check-circle"></i> 
+                                <div>
+                                    <strong>分布式软总线能力</strong>
+                                    <p style="font-size: 0.9rem; color: #64748b; margin: 0.3rem 0 0 1.8rem;">
+                                        手机感知+手表震动+耳机语音，三设备实时协同预警
+                                    </p>
+                                </div>
+                            </li>
+                            <li>
+                                <i class="fas fa-check-circle"></i> 
+                                <div>
+                                    <strong>安全与隐私合规</strong>
+                                    <p style="font-size: 0.9rem; color: #64748b; margin: 0.3rem 0 0 1.8rem;">
+                                        摄像头/定位/麦克风权限透明可控，用户信任度更高
+                                    </p>
+                                </div>
+                            </li>
+                            <li>
+                                <i class="fas fa-check-circle"></i> 
+                                <div>
+                                    <strong>智能功耗调度</strong>
+                                    <p style="font-size: 0.9rem; color: #64748b; margin: 0.3rem 0 0 1.8rem;">
+                                        后台AI推理功耗降低30%，支持连续3小时导航
+                                    </p>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="highlight-box" style="margin-top: 2rem; padding: 1.2rem;">
+                        <p style="margin: 0; font-size: 1rem;">
+                            <i class="fas fa-lightbulb" style="color: var(--accent-orange);"></i>
+                            <strong>技术验证：</strong>鸿蒙云真机测试通过，兼容性100%，性能评分98/100
+                        </p>
+                    </div>
+
+                    <div class="flex-row" style="margin-top: 2.5rem; gap: 3rem;">
+                        <div style="text-align: center;">
+                            <div class="big-data" style="background: linear-gradient(135deg, var(--primary-color), var(--secondary-color)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">10亿+</div>
+                            <div class="data-label">鸿蒙生态设备</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div class="big-data" style="background: linear-gradient(135deg, var(--secondary-color), var(--accent-blue)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">5000万+</div>
+                            <div class="data-label">视障+老年用户</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                    <h3 style="color: var(--primary-color); font-size: 1.4rem; margin-bottom: 2rem; text-align: center;">
+                        <i class="fas fa-sitemap"></i> 多设备协同生态（规划中）
+                    </h3>
+                    
+                    <div class="device-matrix" style="position: relative; width: 100%; height: 400px; display: flex; align-items: center; justify-content: center;">
+                        <!-- 中心设备：手机 -->
+                        <div style="position: absolute; text-align: center; z-index: 5;">
+                            <i class="fas fa-mobile-alt" style="font-size: 10rem; color: var(--primary-color);"></i>
+                            <div style="font-weight: 600; margin-top: 0.5rem; color: var(--text-dark);">手机（核心）</div>
+                            <div style="font-size: 0.85rem; color: #64748b;">主导航+视觉感知</div>
+                        </div>
+
+                        <!-- 连接线动画 -->
+                        <svg style="position: absolute; width: 100%; height: 100%; z-index: 1;">
+                            <line x1="50%" y1="50%" x2="20%" y2="30%" stroke="var(--primary-color)" stroke-width="2" stroke-dasharray="5,5" opacity="0.5"/>
+                            <line x1="50%" y1="50%" x2="80%" y2="30%" stroke="var(--primary-color)" stroke-width="2" stroke-dasharray="5,5" opacity="0.5"/>
+                            <line x1="50%" y1="50%" x2="50%" y2="85%" stroke="var(--primary-color)" stroke-width="2" stroke-dasharray="5,5" opacity="0.5"/>
+                        </svg>
+
+                        <!-- 协同设备：手表 -->
+                        <div style="position: absolute; left: 10%; top: 15%; text-align: center; z-index: 3;">
+                            <i class="fas fa-watch" style="font-size: 4rem; color: var(--secondary-color);"></i>
+                            <div style="font-weight: 600; margin-top: 0.3rem; font-size: 0.9rem; color: var(--text-dark);">智能手表</div>
+                            <div style="font-size: 0.75rem; color: #64748b;">震动提醒<br/>快捷语音</div>
+                        </div>
+
+                        <!-- 协同设备：耳机 -->
+                        <div style="position: absolute; right: 10%; top: 15%; text-align: center; z-index: 3;">
+                            <i class="fas fa-headphones" style="font-size: 4rem; color: var(--accent-blue);"></i>
+                            <div style="font-weight: 600; margin-top: 0.3rem; font-size: 0.9rem; color: var(--text-dark);">蓝牙耳机</div>
+                            <div style="font-size: 0.75rem; color: #64748b;">立体声播报<br/>方位感知</div>
+                        </div>
+
+                        <!-- 协同设备：车机 -->
+                        <div style="position: absolute; bottom: 5%; text-align: center; z-index: 3;">
+                            <i class="fas fa-car" style="font-size: 4rem; color: var(--accent-orange);"></i>
+                            <div style="font-weight: 600; margin-top: 0.3rem; font-size: 0.9rem; color: var(--text-dark);">车机系统</div>
+                            <div style="font-size: 0.75rem; color: #64748b;">驾驶模式<br/>无缝切换</div>
+                        </div>
+                    </div>
+
+                    <div class="pilot-banner" style="margin-top: 2rem; width: 100%;">
+                        <i class="fas fa-rocket"></i> <strong>Phase 1：</strong>手机端完整体验 → <strong>Phase 2：</strong>手表/耳机协同 → <strong>Phase 3：</strong>车机/智能家居全场景
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="slide" id="slide-9">
+            <h2 class="h2-title">目标用户 <span class="sub-text">/ 为1700万视障人士 + 2.2亿老年人服务</span></h2>
+            <div class="grid-3">
+                <div class="persona-card">
+                    <div class="persona-header" style="background: linear-gradient(135deg, #f59e0b, #ef4444);">
+                        <div class="persona-avatar"><i class="fas fa-blind"></i></div>
+                        <h3>视障人士 (核心刚需)</h3>
+                    </div>
+                    <div class="persona-body">
+                        <div class="persona-story">
+                            <p><strong>李师傅，42岁，盲人按摩师</strong></p>
+                            <p style="font-size: 0.9em; color: #64748b; margin-top: 8px;">
+                                每天独自通勤1.5公里，只能靠盲杖+记忆路线。盲道被占用、施工改道时完全迷路，传统导航根本用不了。
+                            </p>
+                        </div>
+                        <div class="persona-data-point"><span>人口规模</span> <span class="highlight">1700万</span></div>
+                        <div class="persona-data-point"><span>日均出行</span> <span>2.1次</span></div>
+                        <div class="persona-data-point"><span>付费意愿</span> <span class="highlight">¥25-50/月</span></div>
+                        <div class="persona-data-point"><span>付费率预调研</span> <span>45%（刚需）</span></div>
+                    </div>
+                </div>
+                <div class="persona-card">
+                    <div class="persona-header" style="background: linear-gradient(135deg, var(--secondary-color), var(--accent-blue));">
+                        <div class="persona-avatar"><i class="fas fa-user-clock"></i></div>
+                        <h3>老年人 (潜力市场)</h3>
+                    </div>
+                    <div class="persona-body">
+                        <div class="persona-story">
+                            <p><strong>张大爷，68岁，轻度白内障</strong></p>
+                            <p style="font-size: 0.9em; color: #64748b; margin-top: 8px;">
+                                每天买菜就医，视力下降+反应慢，看不清手机小字，过马路、上下台阶担心摔倒，子女无法时刻陪伴。
+                            </p>
+                        </div>
+                        <div class="persona-data-point"><span>人口规模</span> <span class="highlight">2.2亿 (65岁+)</span></div>
+                        <div class="persona-data-point"><span>日均出行</span> <span>1.3次</span></div>
+                        <div class="persona-data-point"><span>付费意愿</span> <span class="highlight">¥15-20/月</span></div>
+                        <div class="persona-data-point"><span>付费率调研</span> <span>12%（需培育）</span></div>
+                    </div>
+                </div>
+                <div class="persona-card">
+                    <div class="persona-header" style="background: linear-gradient(135deg, var(--accent-orange), #8b5cf6);">
+                        <div class="persona-avatar"><i class="fas fa-baby-carriage"></i></div>
+                        <h3>行动受限人群</h3>
+                    </div>
+                    <div class="persona-body">
+                        <div class="persona-story">
+                            <p><strong>需要陪伴式步行导航的人群</strong></p>
+                            <p style="font-size: 0.9em; color: #64748b; margin-top: 8px;">
+                                需要全程语音引导陪伴和障碍预警服务相关人群。
+                            </p>
+                        </div>
+                        <div class="persona-data-point"><span>人口规模</span> <span class="highlight">约30万</span></div>
+                        <div class="persona-data-point"><span>使用频次</span> <span>周均3-5次</span></div>
+                        <div class="persona-data-point"><span>付费意愿</span> <span class="highlight">¥12-20/月</span></div>
+                        <div class="persona-data-point"><span>付费率预估</span> <span>18%</span></div>
+                    </div>
+                </div>
+            </div>
+            <div class="pilot-banner">
+                <i class="fas fa-bullseye"></i> <strong>优先切入策略：</strong>从视障人群突破（刚需强+社群凝聚力高）— 已接洽XX市盲人协会，首批试点30名用户，预计3月内启动
+            </div>
+        </div>
+
+        <div class="slide" id="slide-10">
+            <h2 class="h2-title">商业模式 <span class="sub-text">/ 公益 × 商业可持续</span></h2>
+            <div class="grid-3">
+                <div class="model-card model-b2c">
+                    <i class="model-icon fas fa-user-check"></i>
+                    <h3>B2C 订阅服务</h3>
+                    <p style="margin: 1rem 0; color: var(--text-gray);">基础版免费 + 会员增值</p>
+                    <div class="big-data">¥19.9<span style="font-size: 1rem;">/月</span></div>
+                    <div class="data-label" style="margin-top: 1rem;">预调研中付费意愿 67.4%</div>
+                    <div class="data-label">核心市场规模预估 4亿元</div>
+                </div>
+                <div class="model-card model-b2b">
+                    <i class="model-icon fas fa-building"></i>
+                    <h3>B2B 解决方案</h3>
+                    <p style="margin: 1rem 0; color: var(--text-gray);">校园/园区/养老机构定制</p>
+                    <div class="big-data" style="color: var(--accent-blue);">¥3-8万<span style="font-size: 1rem;">/年/单位</span></div>
+                    <div class="data-label" style="margin-top: 1rem;">可具体详谈沟通</div>
+                </div>
+                <div class="model-card model-eco">
+                    <i class="model-icon fas fa-handshake"></i>
+                    <h3>生态合作分成</h3>
+                    <p style="margin: 1rem 0; color: var(--text-gray);">政府采购 + 数据服务 + 硬件</p>
+                    <div class="big-data" style="color: var(--accent-orange);">30-50%<span style="font-size: 1rem;">分成比例</span></div>
+                    <div class="data-label" style="margin-top: 1rem;">下一步计划</div>
+                </div>
+            </div>
+            <div class="text-center" style="margin-top: 2rem; font-weight: 700; color: var(--secondary-color);">
+                <i class="fas fa-flag-checkered"></i> 首批落地：A大学、B园区试点（预计3月内上线）
+            </div>
+        </div>
+
+         <div class="slide" id="slide-11">
+            <h2 class="h2-title">市场空间与定位</h2>
+            <div class="grid-2">
+                <div class="market-data-list">
+                    <div>
+                        <div class="big-data">1700万</div>
+                        <div class="data-label" style="font-size: 1.2rem;"><i class="fas fa-users"></i> 视障人士</div>
+                    </div>
+                    <div>
+                        <div class="big-data">2.2亿</div>
+                        <div class="data-label" style="font-size: 1.2rem;"><i class="fas fa-user-clock"></i> 老年人口</div>
+                    </div>
+                    <div>
+                        <div class="big-data">2.3亿次</div>
+                        <div class="data-label" style="font-size: 1.2rem;"><i class="fas fa-walking"></i> 日均步行导航需求</div>
+                    </div>
+                    <div class="card" style="background: var(--accent-blue); color: white;">
+                        <div class="big-data" style="color: white;">10亿元+</div>
+                        <div class="data-label" style="color: rgba(255,255,255,0.8);">年度潜在市场空间</div>
+                    </div>
+                </div>
+                <div class="quadrant-chart">
+                    <div class="axis-x"></div>
+                    <div class="axis-y"></div>
+                    <div class="quadrant-label ql-tr">安全感知 + 路线能力</div>
+                    
+                    <div class="competitor-dot comp-trad">传统导航</div>
+                    <div class="competitor-dot comp-map">高德/百度</div>
+                    <div class="competitor-dot comp-navu">NAVU</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="slide" id="slide-12">
+            <h2 class="h2-title" style="margin-bottom: 1rem;">我们已准备好出发</h2>
+            <div class="success-checklist">
+                <div class="check-item"><i class="fas fa-check-circle"></i> 预警延迟 ≤120ms</div>
+                <div class="check-item"><i class="fas fa-check-circle"></i> 路线完成率 96.8%</div>
+                <div class="check-item"><i class="fas fa-check-circle"></i> 鸿蒙云真机测试通过</div>
+            </div>
+
+            <div class="final-quote">
+                "第一次用导航觉得真的是在'帮我'，不是只告诉我方向。"
+                <div style="font-size: 1rem; margin-top: 1rem; font-weight: 400; opacity: 0.7;">—— 内测用户 #32</div>
+            </div>
+
+            <div style="flex: 1;"></div> <div class="status-bar">
+                <div class="status-item" style="color: var(--accent-orange);">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span>当前挑战：复杂场景识别准确率仍需优化</span>
+                </div>
+                <div class="status-item" style="color: var(--primary-color);">
+                    <i class="fas fa-arrow-up"></i>
+                    <span>信心来源：核心技术闭环已验证，持续迭代可期</span>
+                </div>
+                <div class="status-item" style="color: var(--accent-blue);">
+                    <i class="fas fa-hand-holding-heart"></i>
+                    <span>期待：获得高德团队的认可与支持</span>
+                </div>
+            </div>
+
+            <h2 class="h2-title" style="margin-top: 2rem;">感谢聆听！</h2>
+        </div>
+
+    </div>
+
+    <script>
+        // 简单的PPT切换逻辑
+        const slides = document.querySelectorAll('.slide');
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+        let currentSlide = 0;
+
+        function showSlide(index) {
+            slides.forEach((slide, i) => {
+                slide.classList.remove('active');
+                if (i === index) {
+                    slide.classList.add('active');
+                }
+            });
+        }
+
+        function nextSlide() {
+            currentSlide = (currentSlide + 1) % slides.length;
+            showSlide(currentSlide);
+        }
+
+        function prevSlide() {
+            currentSlide = (currentSlide - 1 + slides.length) % slides.length;
+            showSlide(currentSlide);
+        }
+
+        nextBtn.addEventListener('click', nextSlide);
+        prevBtn.addEventListener('click', prevSlide);
+
+        // 键盘导航
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === ' ') {
+                nextSlide();
+            } else if (e.key === 'ArrowLeft') {
+                prevSlide();
+            }
+        });
+    </script>
+</body>
+</html>
